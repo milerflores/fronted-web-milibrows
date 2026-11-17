@@ -1,0 +1,477 @@
+:root {
+  color: var(--color-graphite);
+  background: var(--color-ivory);
+}
+body {
+  margin: 0;
+}
+.admin-access-page :is(.text-sm, .text-xs) {
+  font-size: 16px;
+}
+.admin-access-page :is(button, input, label) {
+  font-family: var(--font-sans);
+  font-size: 16px;
+}
+.admin-access-page form .border-line {
+  border: 1px solid rgb(26 26 26 / 32%);
+  border-radius: 9999px;
+  background: var(--color-white);
+}
+.admin-access-page form input,
+.admin-access-page form button[type='submit'] {
+  min-height: 56px;
+}
+.admin-access-page form input {
+  border-radius: 9999px;
+  background: var(--color-white);
+  padding-inline: 20px;
+  color: var(--color-black);
+}
+.admin-access-page form input:not(.border-line) {
+  border: 0;
+}
+.admin-access-page form .admin-access-password-field {
+  overflow: hidden;
+}
+.admin-access-page form .admin-access-visibility {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  border: 0;
+  border-radius: 0 9999px 9999px 0;
+  background: transparent;
+  padding-inline: 18px 22px;
+  color: var(--color-black);
+  font-weight: 600;
+}
+.admin-access-page form .admin-access-visibility:hover,
+.admin-access-page form .admin-access-visibility:focus-visible {
+  color: var(--color-black);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.admin-access-page form .admin-access-visibility:focus-visible {
+  outline: none;
+}
+.admin-access-page form > div:last-child {
+  padding-top: 12px;
+}
+.admin-access-page :is(a, button, input):focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+}
+.admin-access-page form > div:focus-within > label {
+  color: var(--color-caramel-dark);
+}
+.admin-access-page form input:focus-visible {
+  outline: none;
+}
+button,
+select {
+  cursor: pointer;
+}
+
+.control-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--color-stone);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.control-select {
+  min-height: 38px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-white);
+  padding: 7px 11px;
+  color: var(--color-graphite);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.control-select:focus-visible,
+.icon-button:focus-visible,
+.appointment-card:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.control-select:disabled {
+  background: var(--color-sand);
+  cursor: default;
+}
+
+.icon-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-white);
+  color: var(--color-graphite);
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.icon-button:hover {
+  border-color: var(--color-gold);
+  background: var(--color-ivory);
+}
+
+.summary-card {
+  display: flex;
+  min-height: 92px;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-white);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.summary-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+}
+.summary-label {
+  color: var(--color-stone);
+  font-size: 12px;
+}
+.summary-value {
+  margin-top: 2px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.calendar-columns {
+  grid-template-columns: 68px repeat(6, minmax(0, 1fr));
+}
+.day-lane {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 63px,
+    var(--color-line) 63px,
+    var(--color-line) 64px
+  );
+}
+.day-lane--today {
+  background-color: #fffcf4;
+}
+
+.appointment-card {
+  z-index: 1;
+  border: 1px solid;
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 6px 7px;
+  color: var(--color-graphite);
+  box-shadow: 0 2px 8px rgb(43 43 43 / 5%);
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
+}
+
+.appointment-card:hover {
+  z-index: 2;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgb(43 43 43 / 12%);
+}
+.appointment-card--confirmed {
+  border-color: #e4d49b;
+  border-left-color: var(--color-gold);
+  background: #fbf5e5;
+}
+.appointment-card--completed {
+  border-color: #cfd5c6;
+  border-left-color: var(--color-sage-dark);
+  background: #f0f3ea;
+}
+.appointment-card--cancelled {
+  border-color: #e8cfc0;
+  border-left-color: var(--color-caramel-dark);
+  background: #faf0ea;
+}
+.appointment-card--missed {
+  border-color: #dcd6cf;
+  border-left-color: var(--color-stone);
+  background: #f5f2ee;
+}
+
+.appointment-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(calc(100vw - 24px), 680px);
+  max-width: none;
+  max-height: 90dvh;
+  margin: auto;
+}
+.appointment-dialog::backdrop {
+  background: rgb(111 107 100 / 35%);
+  backdrop-filter: blur(2px);
+}
+.detail-label {
+  color: var(--color-stone);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.booking-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(calc(100vw - 24px), 1060px);
+  max-width: none;
+  max-height: 92dvh;
+  margin: auto;
+}
+.booking-dialog::backdrop {
+  background: rgb(111 107 100 / 35%);
+  backdrop-filter: blur(2px);
+}
+.form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.form-section-number {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-champagne);
+  font-size: 12px;
+}
+.form-label {
+  display: block;
+  color: var(--color-stone);
+  font-size: 12px;
+  font-weight: 600;
+}
+.form-input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-white);
+  padding: 9px 11px;
+  color: var(--color-graphite);
+  font-size: 14px;
+}
+.form-input:focus-visible,
+.form-tab:focus-visible,
+.booking-dialog button:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+.form-input:disabled {
+  background: var(--color-sand);
+  cursor: not-allowed;
+}
+.form-input[aria-invalid='true'] {
+  border-color: var(--color-caramel-dark);
+}
+.field-error {
+  margin-top: 5px;
+  color: var(--color-caramel-dark);
+  font-size: 12px;
+}
+.form-tab {
+  flex: 1;
+  border-radius: 6px;
+  padding: 9px 12px;
+  color: var(--color-stone);
+  font-size: 13px;
+  font-weight: 600;
+}
+.form-tab--active {
+  background: var(--color-white);
+  color: var(--color-graphite);
+  box-shadow: 0 1px 5px rgb(43 43 43 / 10%);
+}
+
+.admin-workspace {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  background: var(--color-white);
+}
+:is(.admin-workspace, .admin-access-page) {
+  --admin-primary: #e7ca79;
+}
+:is(.admin-workspace, .admin-access-page) button.bg-gold {
+  background-color: var(--admin-primary);
+  color: var(--color-black);
+}
+:is(.admin-workspace, .admin-access-page) button.bg-gold:hover:not(:disabled) {
+  background-color: var(--color-champagne);
+}
+.admin-workspace :is(h1, h2, h3, h4, h5, h6, .font-display) {
+  font-family: var(--font-display);
+}
+.admin-workspace :is(button, input, select, textarea) {
+  font-family: var(--font-sans);
+  font-size: 16px;
+}
+.admin-workspace
+  :is(
+    .text-xs,
+    .text-sm,
+    [class*='text-[10px]'],
+    [class*='text-[11px]'],
+    [class*='text-[12px]'],
+    [class*='text-[13px]'],
+    [class*='text-[14px]'],
+    [class*='text-[15px]'],
+    .control-label,
+    .control-select,
+    .summary-label,
+    .detail-label,
+    .form-section-title,
+    .form-section-number,
+    .form-label,
+    .form-input,
+    .field-error,
+    .form-tab
+  ) {
+  font-size: 16px;
+}
+.admin-workspace [class~='uppercase'],
+.admin-workspace .detail-label {
+  letter-spacing: normal;
+  text-transform: none;
+}
+.admin-workspace *,
+.admin-workspace *::before,
+.admin-workspace *::after,
+.admin-workspace .divide-y > :not(:last-child) {
+  border: 0;
+}
+.admin-workspace .divide-y > :nth-child(even) {
+  background-color: var(--color-ivory);
+}
+.admin-workspace .admin-main-header {
+  border-bottom: 1px solid rgb(26 26 26 / 12%);
+}
+.admin-workspace .admin-logout {
+  border: 1px solid rgb(26 26 26 / 28%);
+}
+.admin-workspace :is(main > section, .summary-card) {
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgb(26 26 26 / 5%);
+}
+.admin-workspace .summary-card {
+  min-height: 112px;
+  padding: 22px;
+  background: var(--color-ivory);
+}
+.admin-workspace .summary-value {
+  font-size: 32px;
+}
+.admin-workspace .admin-agenda-calendar {
+  border-radius: 24px;
+  box-shadow: 0 16px 40px rgb(26 26 26 / 9%);
+}
+.admin-workspace .summary-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+}
+.admin-workspace .admin-today-stat {
+  min-height: 76px;
+  padding: 12px 18px;
+}
+.admin-workspace .admin-today-stat .summary-icon {
+  width: 42px;
+  height: 42px;
+}
+.admin-workspace .admin-today-stat .summary-label {
+  font-size: 16px;
+}
+.admin-workspace .admin-today-stat .summary-value {
+  font-size: 26px;
+}
+.admin-workspace .icon-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--color-sand);
+}
+.admin-workspace .icon-button:hover {
+  background: var(--color-champagne);
+}
+.admin-workspace :is(.form-input, .control-select, input[type='search']) {
+  min-height: 48px;
+  border-radius: 12px;
+  background: var(--color-sand);
+  padding: 11px 14px;
+}
+.admin-workspace textarea.form-input {
+  min-height: 112px;
+}
+.admin-workspace .form-tab {
+  border-radius: 9999px;
+  background: var(--color-sand);
+}
+.admin-workspace .form-tab--active {
+  background: var(--color-white);
+}
+.admin-workspace button[class~='border']:not([class~='bg-white']) {
+  border-radius: 12px;
+  background: var(--color-sand);
+}
+.admin-workspace :is(.appointment-dialog, .booking-dialog) {
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 26px;
+  background: var(--color-white);
+  padding: 6px;
+  box-shadow: 0 24px 80px rgb(26 26 26 / 18%);
+}
+.admin-workspace .appointment-dialog {
+  width: min(calc(100vw - 24px), 680px);
+  max-height: 90dvh;
+}
+.admin-workspace .booking-dialog {
+  width: min(calc(100vw - 24px), 1060px);
+  max-height: 92dvh;
+}
+.admin-workspace :is(.appointment-dialog, .booking-dialog) > :is(form, .admin-dialog-scroll) {
+  max-height: calc(90dvh - 12px);
+  overflow-y: auto;
+  scrollbar-color: rgb(111 107 100 / 45%) transparent;
+  scrollbar-width: thin;
+}
+.admin-workspace .booking-dialog > :is(form, .admin-dialog-scroll) {
+  max-height: calc(92dvh - 12px);
+}
+.admin-workspace
+  :is(.appointment-dialog, .booking-dialog)
+  > :is(form, .admin-dialog-scroll)
+  > :is(div, footer) {
+  padding-inline: clamp(24px, 4vw, 48px);
+}
+.admin-workspace .appointment-dialog > .admin-appointment-detail {
+  padding: clamp(24px, 4vw, 48px);
+}
+.admin-workspace .appointment-card {
+  padding: 3px 7px;
+  line-height: 1.1;
+}
