@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { dateFromKey, endTime } from '../../shared/agenda/dates'
-import { getClientProfile } from '../../shared/agenda/mockAgendaService'
+import { getClientProfile } from '../../shared/agenda/agendaService'
 import type {
   AgendaData,
   Appointment,
   Client,
   ClientProfile,
-  DemoActor,
+  Actor,
 } from '../../shared/agenda/types'
 import { Icon } from './Icon'
 
@@ -20,7 +20,7 @@ const money = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN
 interface ClientProfileDialogProps {
   clientId: string
   sourceAppointmentId?: string
-  actor: DemoActor
+  actor: Actor
   data: AgendaData
   onClose: () => void
   onEdit: (client: Client) => void
@@ -53,7 +53,7 @@ export function ClientProfileDialog({
   }, [])
   useEffect(() => {
     let active = true
-    getClientProfile(clientId, actor, sourceAppointmentId)
+    getClientProfile(clientId, actor)
       .then((result) => {
         if (active) {
           setProfile(result)
@@ -256,30 +256,37 @@ export function ClientProfileDialog({
                           </button>
                         </div>
                         <ul className="mt-3 divide-y divide-line border-y border-line text-sm">
-                          {appointment.services.map((service) => (
-                            <li key={service.serviceId} className="flex justify-between gap-3 py-2">
-                              <span>
-                                {service.serviceName}
-                                <span className="block text-xs text-stone">
-                                  {service.agreedDuration} min
+                          {appointment.services
+                            .filter((service) => service.result === 'realizado')
+                            .map((service) => (
+                              <li
+                                key={service.serviceId}
+                                className="flex justify-between gap-3 py-2"
+                              >
+                                <span>
+                                  {service.serviceName}
+                                  <span className="block text-xs text-stone">
+                                    {service.agreedDuration} min
+                                  </span>
                                 </span>
-                              </span>
-                              <span className="whitespace-nowrap">
-                                {money.format(service.agreedPrice)}
-                              </span>
-                            </li>
-                          ))}
+                                <span className="whitespace-nowrap">
+                                  {money.format(service.agreedPrice)}
+                                </span>
+                              </li>
+                            ))}
                         </ul>
                         <div className="mt-3 flex justify-between gap-3 text-sm">
                           <span className="text-stone">
-                            {durationOf(appointment)} min · Precio total acordado
+                            {appointment.services
+                              .filter((service) => service.result === 'realizado')
+                              .reduce((sum, service) => sum + service.agreedDuration, 0)}{' '}
+                            min · Precio total acordado
                           </span>
                           <strong>
                             {money.format(
-                              appointment.services.reduce(
-                                (sum, service) => sum + service.agreedPrice,
-                                0,
-                              ),
+                              appointment.services
+                                .filter((service) => service.result === 'realizado')
+                                .reduce((sum, service) => sum + service.agreedPrice, 0),
                             )}
                           </strong>
                         </div>

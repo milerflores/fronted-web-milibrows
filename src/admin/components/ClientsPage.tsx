@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { getClientList } from '../../shared/agenda/mockAgendaService'
-import type { AgendaData, Client, DemoActor } from '../../shared/agenda/types'
+import { getClientList } from '../../shared/agenda/agendaService'
+import type { AgendaData, Client, Actor } from '../../shared/agenda/types'
 import { Icon } from './Icon'
 
 interface ClientsPageProps {
-  actor: DemoActor
+  actor: Actor
   data: AgendaData | null
   notice: string | null
   onOpen: (client: Client) => void
@@ -29,7 +29,7 @@ export function ClientsPage({ actor, data, notice, onOpen, onEdit, onNew }: Clie
 
   useEffect(() => {
     let active = true
-    getClientList(actor)
+    getClientList()
       .then((result) => {
         if (active) {
           setClients(result)
@@ -53,6 +53,7 @@ export function ClientsPage({ actor, data, notice, onOpen, onEdit, onNew }: Clie
   const visible = clients.filter(
     (client) =>
       normalized(client.name).includes(search) ||
+      ((client.dni ?? '').includes(query.trim()) && query.trim().length > 0) ||
       (digits.length > 0 && client.phone.replace(/\D/g, '').includes(digits)),
   )
 

@@ -1,59 +1,36 @@
 export type AppointmentStatus = 'confirmada' | 'completada' | 'cancelada' | 'no asistió'
 
-export type DemoActor =
+export type Actor =
   | { role: 'administrador' | 'recepcionista' }
   | { role: 'estilista'; stylistId: string }
 
 export interface Client {
   id: string
+  dni?: string
   name: string
+  firstName: string
+  paternalLastName: string
+  maternalLastName?: string
   phone: string
   email: string
   preferences?: string
-}
-
-export interface DemoClientAccount {
-  id: string
-  role: 'cliente'
-  clientId: string
-}
-
-export interface DemoClientIdentity extends DemoClientAccount {
-  name: string
-  phone: string
-  email: string
-}
-
-export type ClientAppointment = Pick<
-  Appointment,
-  | 'id'
-  | 'clientId'
-  | 'stylistId'
-  | 'date'
-  | 'startTime'
-  | 'status'
-  | 'services'
-  | 'notes'
-  | 'cancellationReason'
-> & { stylistName: string }
-
-export interface ClientSelfProfile {
-  client: Client
-  completed: ClientAppointment[]
+  active?: boolean
 }
 
 export interface ClientInput {
-  name: string
+  dni?: string
+  firstName: string
+  paternalLastName: string
+  maternalLastName?: string
   phone: string
   email: string
   preferences?: string
+  active?: boolean
 }
 
 export interface ClientRecordResult {
   client: Client
-  data: AgendaData
 }
-
 export interface ClientProfile {
   client: Client
   upcoming: Appointment[]
@@ -63,116 +40,78 @@ export interface ClientProfile {
 export interface Stylist {
   id: string
   name: string
-  phone?: string
-  email?: string
-  specialty?: string
   active: boolean
-  serviceIds: string[]
-}
-
-export interface StylistInput {
-  name: string
-  phone: string
-  email: string
-  specialty: string
   serviceIds: string[]
 }
 
 export interface Service {
   id: string
-  name: string
   description?: string
+  imageUrl?: string
+  visible?: boolean
+  name: string
   price: number
   duration: number
   active: boolean
 }
-
-export type PublicService = Pick<Service, 'id' | 'name' | 'description' | 'price' | 'duration'>
-export type PublicStylist = Pick<Stylist, 'id' | 'name' | 'specialty' | 'serviceIds'>
-
-export interface PublicCatalog {
-  services: PublicService[]
-  stylists: PublicStylist[]
-}
-
-export interface ServiceInput {
-  name: string
-  description: string
-  price: number
-  duration: number
-}
-
-export interface CatalogResult<T extends Service | Stylist> {
-  record: T
-  data: AgendaData
-}
+export type PublicService = Service
 
 export interface AppointmentService {
+  id: string
   serviceId: string
+  stylistId: string
+  stylistName: string
+  startTime: string
   serviceName: string
+  listPrice: number
+  automaticDiscount: number
   agreedPrice: number
   agreedDuration: number
+  result: 'pendiente' | 'en_proceso' | 'realizado' | 'cancelado' | 'no_realizado'
+  resultReason?: string
+  manualDiscount?: {
+    amount: number
+    reason?: string
+    note?: string
+  }
+}
+
+export interface AppointmentPayment {
+  id: string
+  methodName: string
+  amount: number
+  paidAt: string
+  reference?: string
+  status: 'registrado' | 'anulado'
 }
 
 export interface Appointment {
   id: string
   clientId: string
   stylistId: string
+  stylistIds: string[]
+  stylistName: string
   date: string
   startTime: string
+  startsAt: string
   status: AppointmentStatus
   services: AppointmentService[]
-  notes?: string
-  origin?: 'panel' | 'web'
-  createdByClientAccountId?: string
+  payments: AppointmentPayment[]
+  totalRealized: number
+  totalPaid: number
+  pendingBalance: number
+  client?: Client
   cancellationReason?: string
-  cancelledAt?: string
-  cancelledBy?: DemoActor | DemoClientAccount
-  rescheduledAt?: string
-  rescheduledBy?: DemoActor | DemoClientAccount
   completedAt?: string
-  completedBy?: DemoActor
   completionNotes?: string
-  noShowAt?: string
-  noShowBy?: DemoActor
-  noShowNotes?: string
-}
-
-export type AppointmentClientInput =
-  | { kind: 'existing'; clientId: string }
-  | { kind: 'new'; name: string; phone: string; email: string }
-
-export interface NewAppointmentInput {
-  client: AppointmentClientInput
-  serviceIds: string[]
-  stylistId: string
-  date: string
-  startTime: string
-  notes: string
-}
-
-export type ClientBookingInput = Omit<NewAppointmentInput, 'client'>
-
-export interface ClientBookingResult {
-  appointment: Appointment
-  client: DemoClientIdentity
+  events?: { type: string; date: string; reason?: string }[]
 }
 
 export interface CreatedAppointment {
   appointment: Appointment
-  data: AgendaData
 }
-
-export interface RescheduleInput {
-  appointmentId: string
-  date: string
-  startTime: string
-  stylistId: string
-}
-
 export interface AgendaData {
   clients: Client[]
   stylists: Stylist[]
-  services: Service[]
   appointments: Appointment[]
 }

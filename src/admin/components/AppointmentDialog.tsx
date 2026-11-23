@@ -1,42 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
-import { dateFromKey, endTime } from '../../shared/agenda/dates'
+import type { FormEvent } from 'react'
+import { resource } from '../../shared/api/http'
+import { useApi } from '../../shared/api/useApi'
+import type {
+  AppointmentDto,
+  DiscountReasonDto,
+  PaymentMethodDto,
+} from '../../shared/api/types'
 import {
   canCancelAppointment,
   canCompleteAppointment,
   canMarkNoShow,
   canRescheduleAppointment,
-} from '../../shared/agenda/mockAgendaService'
+  mapAppointment,
+} from '../../shared/agenda/agendaService'
 import type {
+  Actor,
   AgendaData,
   Appointment,
-  DemoActor,
-  DemoClientAccount,
+  AppointmentService,
+  CreatedAppointment,
 } from '../../shared/agenda/types'
-import { Icon } from './Icon'
+import { endTime } from '../../shared/agenda/dates'
+import { Feedback, Field, Modal, ServiceResults } from '../../shared/components/Forms'
+import { RegisterPaymentModal } from './PaymentsPage'
 import { StatusBadge } from './StatusBadge'
 
-const money = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' })
-const fullDate = new Intl.DateTimeFormat('es-PE', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-})
-const actionDate = new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' })
-
-function actorLabel(actor: DemoActor | DemoClientAccount, data: AgendaData | null): string {
-  if (actor.role === 'cliente')
-    return `Cliente · ${data?.clients.find((client) => client.id === actor.clientId)?.name ?? 'Sin identificar'}`
-  if (actor.role !== 'estilista')
-    return actor.role === 'administrador' ? 'Administrador' : 'Recepcionista'
-  const stylistId = actor.stylistId
-  return `Estilista · ${data?.stylists.find((stylist) => stylist.id === stylistId)?.name ?? 'Sin identificar'}`
-}
-
-interface AppointmentDialogProps {
-  appointment: Appointment | null
+interface Props {
+  appointment: Appointment
   data: AgendaData | null
-  actor: DemoActor
+  actor: Actor
   notice: string | null
   onClose: () => void
   onReschedule: (appointment: Appointment) => void
@@ -44,6 +37,144 @@ interface AppointmentDialogProps {
   onComplete: (appointment: Appointment) => void
   onNoShow: (appointment: Appointment) => void
   onOpenClient: (appointment: Appointment) => void
+  onUpdated: (result: CreatedAppointment, msg?: string) => void
+}
+
+function ManualDiscountModal({
+  appointmentId,
+  service,
+  reasons,
+  onClose,
+  onSaved,
+}: {
+  appointmentId: string
+  service: AppointmentService
+  reasons: DiscountReasonDto[]
+  onClose: () => void
+  onSaved: (updated: Appointment) => void
+}) {
+  const maxDiscount = Math.max(0, Number((service.listPrice - service.automaticDiscount).toFixed(2)))
+  const [amount, setAmount] = useState(
+    service.manualDiscount ? service.manualDiscount.amount.toFixed(2) : '',
+  )
+  const [reasonId, setReasonId] = useState('')
+  const [note, setNote] = useState(service.manualDiscount?.note ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const saving = useRef(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (saving.current) return
+    if (!reasonId && !note.trim()) {
+      setError('Selecciona un motivo o escribe una observación.')
+      return
+    }
+    saving.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const dto = await resource<AppointmentDto>(
+        `/citas/${appointmentId}/servicios/${service.id}/descuento-manual`,
+        'PUT',
+        {
+          monto: amount,
+          id_motivo_descuento: reasonId ? Number(reasonId) : null,
+          nota: note.trim() || null,
+        },
+      )
+      onSaved(mapAppointment(dto))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo aplicar el descuento.')
+    } finally {
+      saving.current = false
+      setBusy(false)
+    }
+  }
+
+  async function removeDiscount() {
+    if (saving.current) return
+    saving.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const dto = await resource<AppointmentDto>(
+        `/citas/${appointmentId}/servicios/${service.id}/descuento-manual`,
+        'DELETE',
+      )
+      onSaved(mapAppointment(dto))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo quitar el descuento.')
+    } finally {
+      saving.current = false
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title={`Descuento manual · ${service.serviceName}`} busy={busy} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-5">
+        <p className="rounded-card bg-sand p-4 text-sm">
+          Precio lista: S/ {service.listPrice.toFixed(2)} · Descuento automático: S/{' '}
+          {service.automaticDiscount.toFixed(2)} · Máximo descuento manual: S/{' '}
+          {maxDiscount.toFixed(2)}
+        </p>
+        <Field
+          label="Monto del descuento manual (S/)"
+          type="number"
+          min="0"
+          max={String(maxDiscount)}
+          step="0.01"
+          required
+          disabled={busy}
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+        />
+        <label className="block text-sm font-semibold">
+          Motivo (opcional si escribes nota)
+          <select
+            className="api-input mt-2"
+            disabled={busy}
+            value={reasonId}
+            onChange={(event) => setReasonId(event.target.value)}
+          >
+            <option value="">Sin motivo predefinido</option>
+            {reasons.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm font-semibold">
+          Observación
+          <textarea
+            className="api-input mt-2 min-h-24"
+            maxLength={2000}
+            disabled={busy}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </label>
+        <Feedback error={error} />
+        <div className="flex flex-wrap gap-3">
+          <button className="api-primary" disabled={busy}>
+            {busy ? 'Guardando…' : 'Aplicar descuento'}
+          </button>
+          {service.manualDiscount && (
+            <button
+              type="button"
+              className="api-secondary"
+              disabled={busy}
+              onClick={() => void removeDiscount()}
+            >
+              Quitar descuento
+            </button>
+          )}
+        </div>
+      </form>
+    </Modal>
+  )
 }
 
 export function AppointmentDialog({
@@ -57,246 +188,248 @@ export function AppointmentDialog({
   onComplete,
   onNoShow,
   onOpenClient,
-}: AppointmentDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-  const [, setClockTick] = useState(0)
+  onUpdated,
+}: Props) {
+  const [, setTick] = useState(0)
+  const [discountTarget, setDiscountTarget] = useState<AppointmentService | null>(null)
+  const [paying, setPaying] = useState(false)
+  const [busyServiceId, setBusyServiceId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState('')
+
+  const canManagePayments = actor.role === 'administrador' || actor.role === 'recepcionista'
+  const canEditDiscounts = canManagePayments && appointment.totalPaid === 0
+  const reasons = useApi<DiscountReasonDto[]>(
+    canEditDiscounts ? '/fidelizacion/motivos-descuento?solo_activos=1' : null,
+  )
+  const methods = useApi<PaymentMethodDto[]>(
+    canManagePayments && appointment.status === 'completada' && appointment.pendingBalance > 0
+      ? '/caja/metodos-pago'
+      : null,
+  )
 
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (appointment && !dialog?.open) dialog?.showModal()
-    if (!appointment && dialog?.open) dialog.close()
-  }, [appointment])
-
-  useEffect(() => {
-    if (!appointment || appointment.status !== 'confirmada') return
-    const timer = window.setInterval(() => setClockTick((tick) => tick + 1), 30_000)
+    const timer = window.setInterval(() => setTick((value) => value + 1), 30_000)
     return () => window.clearInterval(timer)
-  }, [appointment])
+  }, [])
 
-  const client = data?.clients.find((item) => item.id === appointment?.clientId)
-  const stylist = data?.stylists.find((item) => item.id === appointment?.stylistId)
-  const duration = appointment?.services.reduce((sum, item) => sum + item.agreedDuration, 0) ?? 0
-  const price = appointment?.services.reduce((sum, item) => sum + item.agreedPrice, 0) ?? 0
+  async function startService(service: AppointmentService) {
+    setActionError('')
+    setBusyServiceId(service.id)
+    try {
+      const dto = await resource<AppointmentDto>(
+        `/citas/${appointment.id}/servicios/${service.id}`,
+        'PATCH',
+        { estado_servicio: 'en_proceso' },
+      )
+      onUpdated({ appointment: mapAppointment(dto) }, 'Servicio iniciado (en proceso).')
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'No se pudo iniciar el servicio.')
+    } finally {
+      setBusyServiceId(null)
+    }
+  }
+
+  async function reloadAfterPayment(msg: string) {
+    setPaying(false)
+    try {
+      const dto = await resource<AppointmentDto>(`/citas/${appointment.id}`)
+      onUpdated({ appointment: mapAppointment(dto) }, msg)
+    } catch {
+      onUpdated({ appointment }, msg)
+    }
+  }
+
+  const client =
+    appointment.client ?? data?.clients.find((item) => item.id === appointment.clientId)
+  const duration = appointment.services.reduce((total, item) => total + item.agreedDuration, 0)
+  const total = appointment.services.reduce((sum, item) => sum + item.agreedPrice, 0)
+
+  if (discountTarget) {
+    return (
+      <ManualDiscountModal
+        appointmentId={appointment.id}
+        service={discountTarget}
+        reasons={reasons.data ?? []}
+        onClose={() => setDiscountTarget(null)}
+        onSaved={(updated) => {
+          setDiscountTarget(null)
+          onUpdated({ appointment: updated }, 'Descuento manual actualizado.')
+        }}
+      />
+    )
+  }
+
+  if (paying && methods.data) {
+    return (
+      <RegisterPaymentModal
+        fixedAppointment={{
+          id: appointment.id,
+          pendingBalance: appointment.pendingBalance,
+          label: `Cita #${appointment.id} · ${client?.name ?? `Cliente ${appointment.clientId}`}`,
+        }}
+        methods={methods.data}
+        onClose={() => setPaying(false)}
+        onSaved={(msg) => void reloadAfterPayment(msg)}
+      />
+    )
+  }
 
   return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby="appointment-dialog-title"
-      className="appointment-dialog rounded-card bg-white text-graphite"
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === dialogRef.current) dialogRef.current?.close()
-      }}
-    >
-      {appointment && (
-        <div className="admin-dialog-scroll admin-appointment-detail p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-4 border-b border-line pb-5">
-            <div>
-              <p className="mb-2 text-xs font-semibold tracking-[.18em] text-caramel-dark uppercase">
-                Detalle de cita
-              </p>
-              <h2 id="appointment-dialog-title" className="font-display text-3xl leading-tight">
-                {client?.name}
-              </h2>
-              <p className="mt-1 text-sm text-stone">Código {appointment.id.toUpperCase()}</p>
-            </div>
-            <button
-              type="button"
-              aria-label="Cerrar detalle"
-              className="icon-button"
-              onClick={() => dialogRef.current?.close()}
-            >
-              <Icon name="close" />
-            </button>
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <StatusBadge status={appointment.status} />
-            <span className="text-sm text-stone">{stylist?.name}</span>
-          </div>
-          {notice && (
-            <p
-              role="status"
-              className="mt-5 rounded-card border border-[#CFD5C6] bg-[#F0F3EA] px-4 py-3 text-sm font-semibold text-sage-dark"
-            >
-              {notice}
-            </p>
-          )}
-
-          <dl className="mt-6 grid gap-5 rounded-card bg-ivory p-5 sm:grid-cols-2">
-            <div>
-              <dt className="detail-label">Fecha</dt>
-              <dd className="mt-1 text-sm font-medium">
-                {fullDate.format(dateFromKey(appointment.date))}
-              </dd>
-            </div>
-            <div>
-              <dt className="detail-label">Horario</dt>
-              <dd className="mt-1 text-sm font-medium">
-                {appointment.startTime} – {endTime(appointment.startTime, duration)}
-              </dd>
-            </div>
-            <div>
-              <dt className="detail-label">Contacto</dt>
-              <dd className="mt-1 text-sm font-medium">
-                <a className="hover:underline" href={`tel:${client?.phone.replace(/\s/g, '')}`}>
-                  {client?.phone}
-                </a>
-                {client?.email && (
-                  <>
-                    <br />
-                    <a
-                      className="break-all text-stone hover:underline"
-                      href={`mailto:${client.email}`}
+    <Modal title={client?.name ?? `Cita ${appointment.id}`} onClose={onClose}>
+      <div className="flex flex-wrap items-center gap-4">
+        <StatusBadge status={appointment.status} />
+        <p className="text-sm text-stone">Cita {appointment.id}</p>
+      </div>
+      <Feedback notice={notice ?? ''} error={actionError} />
+      <dl className="my-6 grid gap-5 rounded-card bg-sand p-5 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-stone">Fecha y horario</dt>
+          <dd className="mt-2 font-semibold">
+            {appointment.date} · {appointment.startTime}–{endTime(appointment.startTime, duration)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-stone">Estilista</dt>
+          <dd className="mt-2 font-semibold">{appointment.stylistName}</dd>
+        </div>
+        <div>
+          <dt className="text-stone">DNI</dt>
+          <dd className="mt-2">{client?.dni || 'Sin registrar'}</dd>
+        </div>
+        <div>
+          <dt className="text-stone">Contacto</dt>
+          <dd className="mt-2 break-all">{client?.phone || client?.email || 'Sin registrar'}</dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        className="text-sm font-semibold text-caramel-dark underline"
+        onClick={() => onOpenClient(appointment)}
+      >
+        Ver ficha e historial permitido
+      </button>
+      <h3 className="mt-7 font-display text-xl">Servicios acordados</h3>
+      <ServiceResults services={appointment.services} />
+      {(canEditDiscounts || appointment.status === 'confirmada') && (
+        <div className="mt-3 space-y-2">
+          {appointment.services.map((svc) => {
+            const canStart =
+              appointment.status === 'confirmada' &&
+              svc.result === 'pendiente' &&
+              (actor.role !== 'estilista' || actor.stylistId === svc.stylistId)
+            if (!canEditDiscounts && !canStart) return null
+            return (
+              <div
+                key={svc.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line px-4 py-2 text-xs"
+              >
+                <span className="font-semibold">
+                  {svc.serviceName}
+                  {svc.manualDiscount
+                    ? ` · Desc. manual S/ ${svc.manualDiscount.amount.toFixed(2)}`
+                    : ''}
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {canStart && (
+                    <button
+                      type="button"
+                      className="api-secondary"
+                      disabled={busyServiceId === svc.id}
+                      onClick={() => void startService(svc)}
                     >
-                      {client.email}
-                    </a>
-                  </>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="detail-label">Estilista</dt>
-              <dd className="mt-1 text-sm font-medium">{stylist?.name}</dd>
-            </div>
-          </dl>
-          <button
-            type="button"
-            className="mt-3 text-sm font-semibold text-caramel-dark underline underline-offset-2 hover:text-graphite focus-visible:outline-2 focus-visible:outline-gold"
-            onClick={() => onOpenClient(appointment)}
-          >
-            {actor.role === 'estilista' ? 'Ver ficha de esta cliente' : 'Ver ficha de cliente'}
-          </button>
-          {appointment.rescheduledAt && appointment.rescheduledBy && (
-            <p className="mt-3 text-xs text-stone">
-              Última reprogramación: {actionDate.format(new Date(appointment.rescheduledAt))} ·{' '}
-              {actorLabel(appointment.rescheduledBy, data)}
-            </p>
-          )}
-
-          <div className="mt-7">
-            <h3 className="text-sm font-semibold">Servicios acordados</h3>
-            <div className="mt-3 divide-y divide-line border-y border-line">
-              {appointment.services.map((item) => (
-                <div
-                  key={item.serviceId}
-                  className="flex items-center justify-between gap-4 py-3 text-sm"
-                >
-                  <div>
-                    <p className="font-medium">{item.serviceName}</p>
-                    <p className="mt-0.5 text-xs text-stone">{item.agreedDuration} min</p>
-                  </div>
-                  <span className="font-semibold whitespace-nowrap">
-                    {money.format(item.agreedPrice)}
-                  </span>
+                      {busyServiceId === svc.id ? 'Iniciando…' : 'Iniciar'}
+                    </button>
+                  )}
+                  {canEditDiscounts && (
+                    <button
+                      type="button"
+                      className="api-secondary"
+                      onClick={() => setDiscountTarget(svc)}
+                    >
+                      {svc.manualDiscount ? 'Editar descuento' : 'Descuento manual'}
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center justify-between text-sm">
-              <span className="text-stone">Duración total</span>
-              <strong>{duration} min</strong>
-            </div>
-            <div className="mt-2 flex items-center justify-between text-base">
-              <span className="font-semibold">Total acordado</span>
-              <strong>{money.format(price)}</strong>
-            </div>
-          </div>
-
-          {appointment.status === 'cancelada' && appointment.cancellationReason && (
-            <div className="mt-6 rounded-card border border-[#EBD5C8] bg-[#FBF5F1] p-4 text-sm">
-              <p className="font-semibold text-caramel-dark">Motivo de cancelación</p>
-              <p className="mt-1 text-stone">{appointment.cancellationReason}</p>
-              {appointment.cancelledAt && appointment.cancelledBy && (
-                <p className="mt-3 text-xs text-caramel-dark">
-                  {actionDate.format(new Date(appointment.cancelledAt))} ·{' '}
-                  {actorLabel(appointment.cancelledBy, data)}
-                </p>
-              )}
-            </div>
-          )}
-          {appointment.status === 'completada' &&
-            (appointment.completedAt || appointment.completionNotes) && (
-              <div className="mt-6 rounded-card border border-line bg-ivory p-4 text-sm">
-                <p className="font-semibold">Atención completada</p>
-                {appointment.completedAt && appointment.completedBy && (
-                  <p className="mt-1 text-xs text-stone">
-                    {actionDate.format(new Date(appointment.completedAt))} ·{' '}
-                    {actorLabel(appointment.completedBy, data)}
-                  </p>
-                )}
-                {appointment.completionNotes && (
-                  <p className="mt-3 whitespace-pre-wrap text-stone">
-                    {appointment.completionNotes}
-                  </p>
-                )}
               </div>
-            )}
-          {appointment.status === 'no asistió' &&
-            (appointment.noShowAt || appointment.noShowNotes) && (
-              <div className="mt-6 rounded-card border border-line bg-ivory p-4 text-sm">
-                <p className="font-semibold">Inasistencia registrada</p>
-                {appointment.noShowAt && appointment.noShowBy && (
-                  <p className="mt-1 text-xs text-stone">
-                    {actionDate.format(new Date(appointment.noShowAt))} ·{' '}
-                    {actorLabel(appointment.noShowBy, data)}
-                  </p>
-                )}
-                {appointment.noShowNotes && (
-                  <p className="mt-3 whitespace-pre-wrap text-stone">{appointment.noShowNotes}</p>
-                )}
-              </div>
-            )}
-          {appointment.notes && (
-            <div className="mt-6 rounded-card bg-ivory p-4 text-sm">
-              <p className="font-semibold">Observaciones de la reserva</p>
-              <p className="mt-1 whitespace-pre-wrap text-stone">{appointment.notes}</p>
-            </div>
-          )}
-          {(canRescheduleAppointment(appointment, actor) ||
-            canCancelAppointment(appointment, actor) ||
-            canCompleteAppointment(appointment, actor) ||
-            canMarkNoShow(appointment, actor)) && (
-            <div className="mt-7 flex flex-wrap justify-end gap-3 border-t border-line pt-5">
-              {canCancelAppointment(appointment, actor) && (
-                <button
-                  type="button"
-                  className="rounded-lg border border-caramel-dark px-4 py-2.5 text-sm font-semibold text-caramel-dark hover:bg-[#FAF0EA] focus-visible:outline-2 focus-visible:outline-caramel-dark"
-                  onClick={() => onCancel(appointment)}
-                >
-                  Cancelar cita
-                </button>
-              )}
-              {canRescheduleAppointment(appointment, actor) && (
-                <button
-                  type="button"
-                  className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-graphite hover:bg-[#D7B65F] focus-visible:outline-2 focus-visible:outline-gold"
-                  onClick={() => onReschedule(appointment)}
-                >
-                  Reprogramar
-                </button>
-              )}
-              {canMarkNoShow(appointment, actor) && (
-                <button
-                  type="button"
-                  className="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-graphite hover:bg-ivory focus-visible:outline-2 focus-visible:outline-gold"
-                  onClick={() => onNoShow(appointment)}
-                >
-                  Registrar inasistencia
-                </button>
-              )}
-              {canCompleteAppointment(appointment, actor) && (
-                <button
-                  type="button"
-                  className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-graphite hover:bg-[#D7B65F] focus-visible:outline-2 focus-visible:outline-gold"
-                  onClick={() => onComplete(appointment)}
-                >
-                  Completar atención
-                </button>
-              )}
-            </div>
-          )}
+            )
+          })}
         </div>
       )}
-    </dialog>
+      <p className="mt-3 text-right font-semibold">Total acordado S/ {total.toFixed(2)}</p>
+      {(appointment.payments.length > 0 || appointment.status === 'completada') && (
+        <div className="mt-5 rounded-card bg-sand p-4 text-sm">
+          <p className="font-semibold">
+            Realizado: S/ {appointment.totalRealized.toFixed(2)} · Pagado: S/{' '}
+            {appointment.totalPaid.toFixed(2)} · Saldo pendiente: S/{' '}
+            {appointment.pendingBalance.toFixed(2)}
+          </p>
+        </div>
+      )}
+      {appointment.cancellationReason && (
+        <div className="mt-5 rounded-card bg-sand p-4 text-sm">
+          <h3 className="font-semibold">Motivo de cancelación</h3>
+          <p className="mt-2 whitespace-pre-wrap">{appointment.cancellationReason}</p>
+        </div>
+      )}
+      {appointment.completionNotes && (
+        <div className="mt-5 rounded-card bg-sand p-4 text-sm">
+          <h3 className="font-semibold">Notas internas de atención</h3>
+          <p className="mt-2 whitespace-pre-wrap">{appointment.completionNotes}</p>
+        </div>
+      )}
+      {!!appointment.events?.length && (
+        <details className="mt-6 text-sm">
+          <summary className="cursor-pointer font-semibold">Actividad de la cita</summary>
+          <ul className="mt-3 divide-y divide-line">
+            {appointment.events.map((event, index) => (
+              <li key={index} className="py-3">
+                <p className="capitalize">{event.type.replaceAll('-', ' ')}</p>
+                <p className="mt-1 text-stone">
+                  {new Intl.DateTimeFormat('es-PE', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                    timeZone: 'America/Lima',
+                  }).format(new Date(event.date))}
+                </p>
+                {event.reason && <p className="mt-1">{event.reason}</p>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <div className="mt-7 flex flex-wrap gap-3 border-t border-line pt-5">
+        {canManagePayments &&
+          appointment.status === 'completada' &&
+          appointment.pendingBalance > 0 && (
+            <button
+              className="api-primary"
+              disabled={!methods.data?.length}
+              onClick={() => setPaying(true)}
+            >
+              Registrar cobro
+            </button>
+          )}
+        {canRescheduleAppointment(appointment, actor) && (
+          <button className="api-primary" onClick={() => onReschedule(appointment)}>
+            Reprogramar
+          </button>
+        )}
+        {canCompleteAppointment(appointment, actor) && (
+          <button className="api-primary" onClick={() => onComplete(appointment)}>
+            Completar atención
+          </button>
+        )}
+        {canMarkNoShow(appointment, actor) && (
+          <button className="api-secondary" onClick={() => onNoShow(appointment)}>
+            Registrar inasistencia
+          </button>
+        )}
+        {canCancelAppointment(appointment, actor) && (
+          <button className="api-secondary text-caramel-dark" onClick={() => onCancel(appointment)}>
+            Cancelar cita
+          </button>
+        )}
+      </div>
+    </Modal>
   )
 }

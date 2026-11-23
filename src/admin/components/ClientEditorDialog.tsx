@@ -1,29 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import {
-  AgendaOperationError,
-  createClient,
-  updateClient,
-} from '../../shared/agenda/mockAgendaService'
-import type { Client, ClientInput, ClientRecordResult, DemoActor } from '../../shared/agenda/types'
+import { AgendaOperationError, createClient, updateClient } from '../../shared/agenda/agendaService'
+import type { Client, ClientInput, ClientRecordResult, Actor } from '../../shared/agenda/types'
 import { ClientFields } from './ClientFields'
 import { Icon } from './Icon'
 
 interface ClientEditorDialogProps {
   client: Client | null
-  actor: DemoActor
+  actor: Actor
   onClose: () => void
   onSaved: (result: ClientRecordResult) => void
 }
 
-export function ClientEditorDialog({ client, actor, onClose, onSaved }: ClientEditorDialogProps) {
+export function ClientEditorDialog({ client, onClose, onSaved }: ClientEditorDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const savingRef = useRef(false)
   const [value, setValue] = useState<ClientInput>({
-    name: client?.name ?? '',
+    dni: client?.dni ?? '',
+    firstName: client?.firstName ?? '',
+    paternalLastName: client?.paternalLastName ?? '',
+    maternalLastName: client?.maternalLastName ?? '',
     phone: client?.phone ?? '',
     email: client?.email ?? '',
     preferences: client?.preferences ?? '',
+    active: client?.active ?? true,
   })
   const [errors, setErrors] = useState<Partial<Record<keyof ClientInput, string>>>({})
   const [generalError, setGeneralError] = useState('')
@@ -41,15 +41,21 @@ export function ClientEditorDialog({ client, actor, onClose, onSaved }: ClientEd
     savingRef.current = true
     setSaving(true)
     try {
-      const result = client
-        ? await updateClient(client.id, value, actor)
-        : await createClient(value, actor)
+      const result = client ? await updateClient(client.id, value) : await createClient(value)
       onSaved(result)
     } catch (cause) {
       if (
         cause instanceof AgendaOperationError &&
         cause.field &&
-        ['name', 'phone', 'email', 'preferences'].includes(cause.field)
+        [
+          'dni',
+          'firstName',
+          'paternalLastName',
+          'maternalLastName',
+          'phone',
+          'email',
+          'preferences',
+        ].includes(cause.field)
       )
         setErrors({ [cause.field]: cause.message })
       else

@@ -1,27 +1,25 @@
-import type { PublicService, PublicStylist } from "../../shared/agenda/types";
+import type { PublicService } from '../../shared/agenda/types'
 
-import { ServiceCard, StudioTeam } from "../components/CatalogCards";
-import { CatalogState } from "../components/CatalogState";
-import hero from "../../assets/images/home/hero.jpg";
-import instalacion from "../../assets/images/home/instalacion.jpg";
-import invitacion from "../../assets/images/home/invitacion.jpg";
+import { ServiceCard } from '../components/CatalogCards'
+import { CatalogState } from '../components/CatalogState'
+import hero from '../../assets/images/home/hero.jpg'
+import instalacion from '../../assets/images/home/instalacion.jpg'
+import invitacion from '../../assets/images/home/invitacion.jpg'
 
 export function HomePage({
   services,
-  stylists,
   loading,
   error,
   onRetry,
   onBookService,
 }: {
-  services: PublicService[] | null;
-  stylists: PublicStylist[] | null;
-  loading: boolean;
-  error: string;
-  onRetry: () => void;
-  onBookService: (id: string) => void;
+  services: PublicService[] | null
+  loading: boolean
+  error: string
+  onRetry: () => void
+  onBookService: (id: string) => void
 }) {
-  const availableServices = services ?? [];
+  const availableServices = services ?? []
 
   return (
     <main id="contenido" className="client-home-page">
@@ -72,8 +70,8 @@ export function HomePage({
                 Nuestros servicios
               </h2>
               <p className="mt-5 max-w-[58ch] text-lg leading-relaxed text-white/80">
-                Explora todos los servicios disponibles, sus tiempos y precios.
-                Elige el cuidado que mejor va contigo.
+                Explora todos los servicios disponibles, sus tiempos y precios. Elige el cuidado que
+                mejor va contigo.
               </p>
             </div>
             <a href="#reservar" className="client-secondary shrink-0">
@@ -111,10 +109,7 @@ export function HomePage({
           loading="lazy"
           className="absolute inset-0 -z-20 h-full w-full object-cover object-center"
         />
-        <div
-          className="absolute inset-0 -z-10 bg-graphite/60"
-          aria-hidden="true"
-        />
+        <div className="absolute inset-0 -z-10 bg-graphite/60" aria-hidden="true" />
         <div className="client-container">
           <div className="max-w-[680px]">
             <h2
@@ -124,8 +119,8 @@ export function HomePage({
               Un espacio para elegir con calma.
             </h2>
             <p className="mt-7 max-w-[47ch] text-lg leading-relaxed text-white/90">
-              Un lugar preparado para disfrutar cada atención con calma. Conoce
-              nuestros servicios y a las estilistas que te acompañarán.
+              Un lugar preparado para disfrutar cada atención con calma. Conoce nuestros servicios y
+              a las estilistas que te acompañarán.
             </p>
             <a
               href="#estilistas"
@@ -150,16 +145,13 @@ export function HomePage({
               Nuestro equipo te acompaña en cada atención.
             </p>
           </div>
-          <CatalogState loading={loading} error={error} onRetry={onRetry} />
-          {!loading &&
-            !error &&
-            (stylists?.length ? (
-              <StudioTeam stylists={stylists} services={services ?? []} />
-            ) : (
-              <p className="rounded-[18px] bg-white/10 p-8 text-white">
-                No hay estilistas activas para mostrar.
-              </p>
-            ))}
+          <p className="max-w-xl text-base leading-relaxed text-white/85">
+            Al reservar podr?s elegir entre las estilistas disponibles para tus servicios y la fecha
+            que prefieras.
+          </p>
+          <a href="#reservar" className="client-primary mt-8">
+            Elegir mi atenci?n
+          </a>
         </div>
       </section>
       <section
@@ -194,5 +186,5 @@ export function HomePage({
         </div>
       </section>
     </main>
-  );
+  )
 }

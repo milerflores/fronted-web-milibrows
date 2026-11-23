@@ -1,460 +1,288 @@
-﻿import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
-import { dateFromKey, endTime } from "../../shared/agenda/dates";
-import {
-  AgendaOperationError,
-  getClientSelfProfile,
-  updateClientSelfProfile,
-} from "../../shared/agenda/mockAgendaService";
+import { useRef, useState } from 'react'
+import type { FormEvent } from 'react'
+import { useApi } from '../../shared/api/useApi'
 import type {
-  Client,
-  ClientInput,
-  ClientSelfProfile,
-  DemoClientIdentity,
-} from "../../shared/agenda/types";
+  AppointmentDto,
+  ClientPaymentDto,
+  LoyaltyDto,
+  ProfileDto,
+} from '../../shared/api/types'
+import {
+  mapAppointment,
+  profileClient,
+  updateClientSelfProfile,
+} from '../../shared/agenda/agendaService'
+import { restoreSession } from '../../shared/agenda/authService'
+import { Feedback, Field, Modal, ServiceResults } from '../../shared/components/Forms'
+import type { ClientInput } from '../../shared/agenda/types'
 
-const money = new Intl.NumberFormat("es-PE", {
-  style: "currency",
-  currency: "PEN",
-});
-const fullDate = new Intl.DateTimeFormat("es-PE", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
-type Field = keyof ClientInput;
-
-interface Props {
-  accounts: DemoClientIdentity[];
-  accountsLoading: boolean;
-  accountsError: string;
-  accountId: string;
-  onRetryAccounts: () => void;
-  onProfileSaved: (updated: Client) => void;
+const pointLabels: Record<string, string> = {
+  ganado: 'Puntos ganados',
+  reversion: 'Reversión',
+  ajuste: 'Ajuste',
 }
 
-export function MyProfilePage({
-  accounts,
-  accountsLoading,
-  accountsError,
-  accountId,
-  onRetryAccounts,
-  onProfileSaved,
-}: Props) {
-  const [profile, setProfile] = useState<ClientSelfProfile | null>(null);
-  const [loading, setLoading] = useState(Boolean(accountId));
-  const [error, setError] = useState("");
-  const [request, setRequest] = useState(0);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<ClientInput>({
-    name: "",
-    phone: "",
-    email: "",
-    preferences: "",
-  });
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({});
-  const [saveError, setSaveError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [saving, setSaving] = useState(false);
-  const savingRef = useRef(false);
-
-  useEffect(() => {
-    if (!accountId) return;
-    let active = true;
-    getClientSelfProfile(accountId)
-      .then((result) => {
-        if (!active) return;
-        setProfile(result);
-        setLoading(false);
-        setError("");
-      })
-      .catch((cause) => {
-        if (active) {
-          setError(cause instanceof Error ? cause.message : "No se pudo cargar tu perfil.");
-          setLoading(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [accountId, request]);
-
-  function retry() {
-    setProfile(null);
-    setLoading(true);
-    setError("");
-    setRequest((current) => current + 1);
-  }
-  function beginEdit() {
-    if (!profile) return;
-    setDraft({
-      name: profile.client.name,
-      phone: profile.client.phone,
-      email: profile.client.email,
-      preferences: profile.client.preferences ?? "",
-    });
-    setFieldErrors({});
-    setSaveError("");
-    setNotice("");
-    setEditing(true);
-  }
-  function cancelEdit() {
-    if (savingRef.current) return;
-    setEditing(false);
-    setFieldErrors({});
-    setSaveError("");
-  }
-  function change(field: Field, value: string) {
-    setDraft((current) => ({ ...current, [field]: value }));
-    setFieldErrors((current) => ({ ...current, [field]: undefined }));
-    setSaveError("");
-  }
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!profile || savingRef.current) return;
-    setFieldErrors({});
-    setSaveError("");
-    savingRef.current = true;
-    setSaving(true);
+function ProfileEditor({
+  initial,
+  onSaved,
+  onClose,
+}: {
+  initial: ClientInput
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const [value, setValue] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const saving = useRef(false)
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (saving.current) return
+    saving.current = true
+    setBusy(true)
+    setError('')
     try {
-      const updated = await updateClientSelfProfile(draft, accountId);
-      setProfile((current) => (current ? { ...current, client: updated } : current));
-      onProfileSaved(updated);
-      setEditing(false);
-      setNotice("Tus datos de contacto y preferencias se guardaron correctamente.");
+      await updateClientSelfProfile(value)
+      onSaved()
+      void restoreSession()
     } catch (cause) {
-      const message =
-        cause instanceof Error ? cause.message : "No se pudo guardar el perfil. Intenta de nuevo.";
-      if (cause instanceof AgendaOperationError && cause.field && cause.field in draft)
-        setFieldErrors({ [cause.field]: message });
-      else setSaveError(message);
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar el perfil.')
     } finally {
-      savingRef.current = false;
-      setSaving(false);
+      saving.current = false
+      setBusy(false)
     }
   }
-
-  const completed = profile?.completed ?? [];
   return (
-    <main
-      id="contenido"
-      className="client-simple-page client-container max-w-[1120px] py-12 sm:py-18"
-    >
-      <div className="mb-10 rounded-[24px] bg-black p-8 text-white sm:p-12">
-        <h1 className="font-display text-4xl sm:text-5xl">Mi perfil</h1>
-        <p className="mt-4 max-w-[55ch] text-white/85">
-          Consulta tus datos y las atenciones que ya se completaron.
-        </p>
-      </div>
-      {accountsLoading && (
-        <p role="status" className="rounded-[16px] bg-white p-6 text-base text-stone">
-          Cargando clientes de demostración…
-        </p>
-      )}
-      {accountsError && (
-        <div role="alert" className="rounded-[16px] bg-white p-6 text-base">
-          <p className="text-caramel-dark">{accountsError}</p>
-          <button type="button" className="client-text-link mt-3" onClick={onRetryAccounts}>
-            Reintentar
-          </button>
+    <Modal title="Mis datos de contacto" onClose={onClose} busy={busy}>
+      <form onSubmit={submit} className="space-y-5">
+        <Field
+          label="Nombre"
+          required
+          maxLength={100}
+          value={value.firstName}
+          onChange={(event) => setValue({ ...value, firstName: event.target.value })}
+        />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Apellido paterno"
+            required
+            maxLength={100}
+            value={value.paternalLastName}
+            onChange={(event) => setValue({ ...value, paternalLastName: event.target.value })}
+          />
+          <Field
+            label="Apellido materno (opcional)"
+            maxLength={100}
+            value={value.maternalLastName ?? ''}
+            onChange={(event) => setValue({ ...value, maternalLastName: event.target.value })}
+          />
         </div>
-      )}
-      {!accountsLoading && !accountsError && !accounts.length && (
-        <p role="status" className="rounded-[16px] bg-white p-6 text-base text-stone">
-          No hay clientes de demostración disponibles.
-        </p>
-      )}
-      {!accountsLoading && !accountsError && accounts.length > 0 && (
-        <>
-          {!accountId && (
-            <p role="status" className="rounded-[16px] bg-white p-6 text-base text-stone">
-              Selecciona un cliente de demostración para consultar su perfil.
-            </p>
-          )}
-          {accountId && loading && (
-            <p role="status" className="rounded-[16px] bg-white p-6 text-base text-stone">
-              Cargando tu perfil e historial…
-            </p>
-          )}
-          {accountId && error && (
-            <div role="alert" className="rounded-[16px] bg-white p-6 text-base">
-              <p className="text-caramel-dark">{error}</p>
-              <button type="button" className="client-text-link mt-3" onClick={retry}>
-                Reintentar
-              </button>
-            </div>
-          )}
-          {accountId && !loading && !error && profile && (
-            <>
-              {notice && (
-                <p
-                  role="status"
-                  className="mb-6 rounded-[12px] bg-champagne/60 p-4 text-base text-graphite"
-                >
-                  {notice}
-                </p>
-              )}
-              <section
-                aria-labelledby="profile-contact-title"
-                className="rounded-[24px] bg-white p-6 shadow-card sm:p-10"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h2 id="profile-contact-title" className="mt-2 font-display text-3xl">
-                      Mis datos
-                    </h2>
-                  </div>
-                  {!editing && (
-                    <button type="button" className="client-secondary" onClick={beginEdit}>
-                      Editar datos
-                    </button>
-                  )}
-                </div>
-                {editing ? (
-                  <form className="mt-7" onSubmit={save} noValidate>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div>
-                        <label htmlFor="profile-name" className="text-base font-semibold">
-                          Nombre completo *
-                        </label>
-                        <input
-                          id="profile-name"
-                          className="client-search mt-2"
-                          type="text"
-                          autoComplete="name"
-                          maxLength={100}
-                          required
-                          value={draft.name}
-                          aria-invalid={!!fieldErrors.name}
-                          aria-describedby={fieldErrors.name ? "profile-name-error" : undefined}
-                          onChange={(event) => change("name", event.target.value)}
-                        />
-                        {fieldErrors.name && (
-                          <p
-                            id="profile-name-error"
-                            role="alert"
-                            className="mt-2 text-base text-caramel-dark"
-                          >
-                            {fieldErrors.name}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label htmlFor="profile-phone" className="text-base font-semibold">
-                          Teléfono *
-                        </label>
-                        <input
-                          id="profile-phone"
-                          className="client-search mt-2"
-                          type="tel"
-                          autoComplete="tel"
-                          maxLength={20}
-                          required
-                          value={draft.phone}
-                          aria-invalid={!!fieldErrors.phone}
-                          aria-describedby={fieldErrors.phone ? "profile-phone-error" : undefined}
-                          onChange={(event) => change("phone", event.target.value)}
-                        />
-                        {fieldErrors.phone && (
-                          <p
-                            id="profile-phone-error"
-                            role="alert"
-                            className="mt-2 text-base text-caramel-dark"
-                          >
-                            {fieldErrors.phone}
-                          </p>
-                        )}
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label htmlFor="profile-email" className="text-base font-semibold">
-                          Correo de contacto (opcional)
-                        </label>
-                        <input
-                          id="profile-email"
-                          className="client-search mt-2"
-                          type="email"
-                          autoComplete="email"
-                          maxLength={120}
-                          value={draft.email}
-                          aria-invalid={!!fieldErrors.email}
-                          aria-describedby={
-                            fieldErrors.email ? "profile-email-error" : "profile-email-help"
-                          }
-                          onChange={(event) => change("email", event.target.value)}
-                        />
-                        <p id="profile-email-help" className="mt-2 text-base text-stone">
-                          Este correo es solo de contacto. No modifica credenciales de acceso.
-                        </p>
-                        {fieldErrors.email && (
-                          <p
-                            id="profile-email-error"
-                            role="alert"
-                            className="mt-2 text-base text-caramel-dark"
-                          >
-                            {fieldErrors.email}
-                          </p>
-                        )}
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label htmlFor="profile-preferences" className="text-base font-semibold">
-                          Preferencias para la atención (opcional)
-                        </label>
-                        <textarea
-                          id="profile-preferences"
-                          className="client-search mt-2 min-h-28 resize-y"
-                          maxLength={500}
-                          value={draft.preferences ?? ""}
-                          aria-invalid={!!fieldErrors.preferences}
-                          aria-describedby={
-                            fieldErrors.preferences ? "profile-preferences-error" : undefined
-                          }
-                          onChange={(event) => change("preferences", event.target.value)}
-                        />
-                        {fieldErrors.preferences && (
-                          <p
-                            id="profile-preferences-error"
-                            role="alert"
-                            className="mt-2 text-base text-caramel-dark"
-                          >
-                            {fieldErrors.preferences}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {saveError && (
-                      <p role="alert" className="mt-5 text-base text-caramel-dark">
-                        {saveError}
-                      </p>
-                    )}
-                    <div className="mt-8 flex flex-wrap gap-3">
-                      <button
-                        type="submit"
-                        className="client-primary disabled:opacity-50"
-                        disabled={saving}
-                      >
-                        {saving ? "Guardando…" : "Guardar"}
-                      </button>
-                      <button
-                        type="button"
-                        className="client-secondary"
-                        disabled={saving}
-                        onClick={cancelEdit}
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <dl className="mt-7 grid gap-6 text-base sm:grid-cols-2">
-                    <div>
-                      <dt className="client-eyebrow">Nombre</dt>
-                      <dd className="mt-2 font-semibold">{profile.client.name}</dd>
-                    </div>
-                    <div>
-                      <dt className="client-eyebrow">Teléfono</dt>
-                      <dd className="mt-2 font-semibold">{profile.client.phone}</dd>
-                    </div>
-                    {profile.client.email && (
-                      <div>
-                        <dt className="client-eyebrow">Correo de contacto</dt>
-                        <dd className="mt-2 break-all font-semibold">{profile.client.email}</dd>
-                      </div>
-                    )}
-                    <div className={profile.client.email ? "" : "sm:col-span-2"}>
-                      <dt className="client-eyebrow">Preferencias declaradas</dt>
-                      <dd className="mt-2 whitespace-pre-wrap text-stone">
-                        {profile.client.preferences || "No se han indicado preferencias."}
-                      </dd>
-                    </div>
-                  </dl>
-                )}
-              </section>
-              <section aria-labelledby="history-title" className="mt-14">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div>
-                    <h2 id="history-title" className="font-display text-3xl sm:text-4xl">
-                      Atenciones completadas
-                    </h2>
-                  </div>
-                  <a href="#reservar" className="client-secondary">
-                    Reservar nueva cita
-                  </a>
-                </div>
-                {!completed.length ? (
-                  <div role="status" className="mt-7 rounded-[20px] bg-sand p-8 text-center">
-                    <p className="font-display text-2xl">Aún no tienes atenciones completadas.</p>
-                    <p className="mt-2 text-base text-stone">
-                      Aquí aparecerán cuando se complete una de tus citas.
-                    </p>
-                    <a href="#reservar" className="client-primary mt-5">
-                      Reservar cita
-                    </a>
-                  </div>
-                ) : (
-                  <div className="mt-7 grid gap-5 lg:grid-cols-2">
-                    {completed.map((appointment) => {
-                      const duration = appointment.services.reduce(
-                        (sum, service) => sum + service.agreedDuration,
-                        0,
-                      );
-                      const price = appointment.services.reduce(
-                        (sum, service) => sum + service.agreedPrice,
-                        0,
-                      );
-                      return (
-                        <article
-                          key={appointment.id}
-                          className="rounded-[20px] bg-white p-6 shadow-card sm:p-8"
-                        >
-                          <h3 className="mt-2 font-display text-2xl capitalize">
-                            {fullDate.format(dateFromKey(appointment.date))}
-                          </h3>
-                          <p className="mt-2 text-base text-stone">
-                            {appointment.startTime} – {endTime(appointment.startTime, duration)} ·{" "}
-                            {appointment.stylistName}
-                          </p>
-                          <ul className="mt-5 space-y-2 rounded-[14px] bg-sand p-4">
-                            {appointment.services.map((service) => (
-                              <li
-                                key={service.serviceId}
-                                className="flex flex-wrap justify-between gap-2 py-3 text-base"
-                              >
-                                <span>
-                                  <strong className="font-semibold">{service.serviceName}</strong>
-                                  <span className="ml-2 text-stone">
-                                    {service.agreedDuration} min
-                                  </span>
-                                </span>
-                                <strong>{money.format(service.agreedPrice)}</strong>
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="mt-4 flex justify-between gap-3 text-base">
-                            <span>Duración total</span>
-                            <strong>{duration} min</strong>
-                          </div>
-                          <div className="mt-2 flex justify-between gap-3 text-base">
-                            <span>Precio total </span>
-                            <strong>{money.format(price)}</strong>
-                          </div>
+        <Field
+          label="Teléfono"
+          type="tel"
+          maxLength={30}
+          value={value.phone}
+          onChange={(event) => setValue({ ...value, phone: event.target.value })}
+        />
+        <Field
+          label="Correo de contacto"
+          type="email"
+          maxLength={255}
+          value={value.email}
+          onChange={(event) => setValue({ ...value, email: event.target.value })}
+        />
+        <label className="block text-sm font-semibold">
+          Preferencias para la atención
+          <textarea
+            className="api-input mt-2 min-h-28"
+            maxLength={2000}
+            value={value.preferences ?? ''}
+            onChange={(event) => setValue({ ...value, preferences: event.target.value })}
+          />
+        </label>
+        <Feedback error={error} />
+        <button disabled={busy} className="api-primary">
+          {busy ? 'Guardando…' : 'Guardar datos'}
+        </button>
+      </form>
+    </Modal>
+  )
+}
 
-                          <a
-                            href={`#mis-citas/${appointment.id}`}
-                            className="client-text-link mt-5 inline-block"
-                          >
-                            Ver detalle de la cita →
-                          </a>
-                        </article>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            </>
+export function MyProfilePage() {
+  const profile = useApi<ProfileDto>('/mi-perfil')
+  const loyalty = useApi<LoyaltyDto>('/mi-perfil/fidelizacion')
+  const payments = useApi<ClientPaymentDto[]>('/mi-perfil/pagos', true)
+  const history = useApi<AppointmentDto[]>('/citas?estado=completada', true)
+  const [editing, setEditing] = useState(false)
+  const [notice, setNotice] = useState('')
+  const client = profile.data ? profileClient(profile.data) : null
+  const visits = (history.data ?? [])
+    .map(mapAppointment)
+    .filter((item) => item.services.some((service) => service.result === 'realizado'))
+    .reverse()
+
+  return (
+    <main id="contenido" className="client-container py-12 sm:py-18">
+      <h1 className="mb-8 font-display text-4xl sm:text-5xl">Mi perfil y beneficios</h1>
+      <Feedback
+        loading={profile.loading}
+        error={profile.error}
+        onRetry={profile.reload}
+        notice={notice}
+      />
+      {client && (
+        <section className="api-panel">
+          <div className="flex flex-wrap justify-between gap-5">
+            <h2 className="font-display text-2xl">{client.name}</h2>
+            <button className="api-secondary" onClick={() => setEditing(true)}>
+              Editar mis datos
+            </button>
+          </div>
+          <dl className="mt-6 grid gap-5 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-stone">DNI</dt>
+              <dd className="mt-1">{client.dni || 'Sin registrar'}</dd>
+            </div>
+            <div>
+              <dt className="text-stone">Correo de acceso</dt>
+              <dd className="mt-1 break-all">{profile.data?.correo}</dd>
+            </div>
+            <div>
+              <dt className="text-stone">Teléfono</dt>
+              <dd className="mt-1">{client.phone || 'Sin registrar'}</dd>
+            </div>
+            <div>
+              <dt className="text-stone">Correo de contacto</dt>
+              <dd className="mt-1 break-all">{client.email || 'Sin registrar'}</dd>
+            </div>
+          </dl>
+          {client.preferences && (
+            <p className="mt-5 whitespace-pre-wrap rounded-card bg-sand p-4 text-sm">
+              {client.preferences}
+            </p>
           )}
-        </>
+        </section>
+      )}
+      <section className="mt-10">
+        <h2 className="font-display text-3xl">Tus beneficios</h2>
+        <Feedback loading={loyalty.loading} error={loyalty.error} onRetry={loyalty.reload} />
+        {loyalty.data && (
+          <>
+            <div className="api-panel mt-6 bg-sand">
+              <p className="font-display text-2xl">
+                Nivel {loyalty.data.nivel.nombre} · {loyalty.data.nivel.porcentaje_descuento}% de
+                descuento
+              </p>
+              <p className="mt-3 text-sm text-stone">
+                {loyalty.data.puntos} puntos acumulados · {loyalty.data.visitas} visitas ·{' '}
+                {loyalty.data.servicios_realizados} servicios recibidos · S/{' '}
+                {loyalty.data.monto_pagado} pagados
+              </p>
+              {loyalty.data.siguiente_nivel && (
+                <div className="mt-4">
+                  <p className="text-sm">
+                    Te faltan {loyalty.data.siguiente_nivel.puntos_faltantes} puntos para alcanzar{' '}
+                    <strong>{loyalty.data.siguiente_nivel.nombre}</strong> (
+                    {loyalty.data.siguiente_nivel.porcentaje_descuento}% de descuento).
+                  </p>
+                  <progress
+                    className="mt-3 h-3 w-full accent-[#C9A24B]"
+                    max={loyalty.data.siguiente_nivel.puntos_minimos}
+                    value={Math.max(0, loyalty.data.puntos)}
+                  />
+                </div>
+              )}
+            </div>
+            {loyalty.data.movimientos.length > 0 && (
+              <div className="api-panel mt-5">
+                <h3 className="font-display text-2xl">Movimientos de puntos</h3>
+                <ul className="mt-4 divide-y divide-line">
+                  {loyalty.data.movimientos.map((mov) => (
+                    <li
+                      key={mov.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-semibold">{pointLabels[mov.tipo] ?? mov.tipo}</p>
+                        {mov.motivo && <p className="mt-1 text-stone">{mov.motivo}</p>}
+                      </div>
+                      <strong>
+                        {mov.puntos > 0 ? `+${mov.puntos}` : mov.puntos} pts
+                      </strong>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+      <section className="mt-12">
+        <h2 className="font-display text-3xl">Mis pagos registrados</h2>
+        <Feedback loading={payments.loading} error={payments.error} onRetry={payments.reload} />
+        {!payments.loading && !payments.error && !(payments.data?.length ?? 0) && (
+          <p className="api-panel mt-5 text-sm text-stone">Aún no tienes pagos registrados.</p>
+        )}
+        {(payments.data?.length ?? 0) > 0 && (
+          <div className="api-panel mt-5">
+            <ul className="divide-y divide-line">
+              {payments.data!.map((payment) => (
+                <li
+                  key={payment.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                >
+                  <div>
+                    <p className="font-semibold">
+                      Cita #{payment.id_cita} · {payment.metodo?.nombre ?? 'Pago'}
+                    </p>
+                    <p className="mt-1 text-stone">
+                      {payment.cita?.fecha ?? ''} · {payment.estado}
+                      {payment.referencia_pago ? ` · Ref. ${payment.referencia_pago}` : ''}
+                    </p>
+                  </div>
+                  <strong>S/ {payment.importe}</strong>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+      <section className="mt-12">
+        <h2 className="font-display text-3xl">Historial de atenciones</h2>
+        <Feedback loading={history.loading} error={history.error} onRetry={history.reload} />
+        {!history.loading && !history.error && !visits.length && (
+          <p className="api-panel mt-5 text-sm text-stone">
+            Aquí aparecerán los servicios recibidos cuando completes tu primera atención.
+          </p>
+        )}
+        <div className="mt-6 grid gap-5 md:grid-cols-2">
+          {visits.map((item) => (
+            <article key={item.id} className="api-panel">
+              <h3 className="font-display text-xl">
+                {item.date} · {item.stylistName}
+              </h3>
+              <ServiceResults
+                services={item.services.filter((service) => service.result === 'realizado')}
+              />
+              <a href={`#mis-citas/${item.id}`} className="text-sm font-semibold underline">
+                Ver cita completa
+              </a>
+            </article>
+          ))}
+        </div>
+      </section>
+      {editing && client && (
+        <ProfileEditor
+          initial={client}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false)
+            profile.reload()
+            setNotice('Tus datos se guardaron correctamente.')
+          }}
+        />
       )}
     </main>
-  );
+  )
 }

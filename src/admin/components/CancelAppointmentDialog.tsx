@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { dateFromKey, endTime } from '../../shared/agenda/dates'
-import { AgendaOperationError, cancelAppointment } from '../../shared/agenda/mockAgendaService'
-import type {
-  AgendaData,
-  Appointment,
-  CreatedAppointment,
-  DemoActor,
-} from '../../shared/agenda/types'
+import { AgendaOperationError, cancelAppointment } from '../../shared/agenda/agendaService'
+import type { AgendaData, Appointment, CreatedAppointment, Actor } from '../../shared/agenda/types'
 import { Icon } from './Icon'
 
 const fullDate = new Intl.DateTimeFormat('es-PE', {
@@ -20,7 +15,7 @@ const fullDate = new Intl.DateTimeFormat('es-PE', {
 interface CancelAppointmentDialogProps {
   appointment: Appointment
   data: AgendaData
-  actor: DemoActor
+  actor: Actor
   onClose: () => void
   onCancelled: (result: CreatedAppointment) => void
 }
@@ -28,7 +23,6 @@ interface CancelAppointmentDialogProps {
 export function CancelAppointmentDialog({
   appointment,
   data,
-  actor,
   onClose,
   onCancelled,
 }: CancelAppointmentDialogProps) {
@@ -60,7 +54,7 @@ export function CancelAppointmentDialog({
     savingRef.current = true
     setSaving(true)
     try {
-      const result = await cancelAppointment(appointment.id, reason, actor)
+      const result = await cancelAppointment(appointment.id, reason)
       onCancelled(result)
     } catch (cause) {
       if (cause instanceof AgendaOperationError && cause.field === 'reason')

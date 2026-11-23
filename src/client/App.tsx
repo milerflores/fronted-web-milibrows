@@ -1,497 +1,291 @@
-﻿import { useEffect, useState } from "react";
-import { getClientSelfProfile } from "../shared/agenda/mockAgendaService";
-import { getSession, signOut } from "../shared/agenda/mockAuthService";
-import type { Session } from "../shared/agenda/mockAuthService";
-import { getPublicCatalog } from "../shared/agenda/mockCatalogStore";
-import { appUrl } from "../shared/appUrls";
-import type { Client, DemoClientIdentity, PublicCatalog } from "../shared/agenda/types";
-import { BookingPage } from "./pages/BookingPage";
-import { ClientAccessPage } from "./pages/ClientAccessPage";
-import { MyAppointmentsPage } from "./pages/MyAppointmentsPage";
-import { MyProfilePage } from "./pages/MyProfilePage";
-import { HomePage } from "./pages/HomePage";
-import logo from "../assets/images/logo/logo.png";
+import { useEffect, useState } from 'react'
+import { useApi } from '../shared/api/useApi'
+import type { ServiceDto } from '../shared/api/types'
+import { mapService } from '../shared/agenda/agendaService'
+import { signOut } from '../shared/agenda/authService'
+import { useAuth } from '../shared/agenda/useAuth'
+import { appUrl } from '../shared/appUrls'
+import { Feedback } from '../shared/components/Forms'
+import { PasswordRecovery } from '../shared/components/PasswordRecovery'
+import { HomePage } from './pages/HomePage'
+import { BookingPage } from './pages/BookingPage'
+import { ClientAccessPage } from './pages/ClientAccessPage'
+import { MyAppointmentsPage } from './pages/MyAppointmentsPage'
+import { MyProfilePage } from './pages/MyProfilePage'
+import logo from '../assets/images/logo/logo.png'
 
-type Page =
-  | "inicio"
-  | "reservar"
-  | "mis-citas"
-  | "mi-perfil"
-  | "login"
-  | "registro"
-  | "no-encontrada";
-type HomeSection = "inicio" | "servicios" | "estilistas";
-type Route = {
-  page: Page;
-  serviceId?: string;
-  section?: Exclude<HomeSection, "inicio">;
-};
-const navigation: { page: HomeSection; label: string }[] = [
-  { page: "inicio", label: "Inicio" },
-  { page: "servicios", label: "Servicios" },
-  { page: "estilistas", label: "Estilistas" },
-];
-
-function readRoute(): Route {
-  const [page, serviceId] = window.location.hash.replace(/^#/, "").split("/");
-  if (!page || page === "inicio") return { page: "inicio" };
-  if (page === "servicios" || page === "estilistas") return { page: "inicio", section: page };
-  if (page === "reservar" || page === "mis-citas") return { page, serviceId };
-  if (page === "mi-perfil" || page === "login" || page === "registro") return { page };
-  return { page: "no-encontrada" };
-}
-
-function isPrivateRoute(route: Route): boolean {
-  return route.page === "mis-citas" || route.page === "mi-perfil";
+function readRoute() {
+  if (window.location.pathname.includes('restablecer-contrasena')) return 'recuperar'
+  return window.location.hash.slice(1) || 'inicio'
 }
 
 function App() {
-  const [route, setRoute] = useState<Route>(readRoute);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [catalog, setCatalog] = useState<PublicCatalog | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [requestVersion, setRequestVersion] = useState(0);
-  const [session, setSession] = useState<Session | null>(getSession);
-  const [accounts, setAccounts] = useState<DemoClientIdentity[]>([]);
-  const [accountsLoading, setAccountsLoading] = useState(Boolean(getSession()));
-  const [accountsError, setAccountsError] = useState("");
-  const [accountRequest, setAccountRequest] = useState(0);
-  const [returnTo, setReturnTo] = useState<string | null>(() =>
-    !getSession() && isPrivateRoute(readRoute()) ? window.location.hash : null,
-  );
-  const [bookingHold, setBookingHold] = useState<Route | null>(null);
-  const [bookingVersion, setBookingVersion] = useState(0);
+  const { session, loading, error: authError } = useAuth()
+  const catalog = useApi<ServiceDto[]>('/servicios')
+  const [route, setRoute] = useState(readRoute)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [bookingService, setBookingService] = useState(() => readRoute().split('/')[1])
+  const [bookingKey, setBookingKey] = useState(0)
+  const [returnTo, setReturnTo] = useState('mi-perfil')
+  const [logoutError, setLogoutError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
+  const page = route.split('/')[0].split('?')[0]
+  const home = ['inicio', 'servicios', 'estilistas'].includes(page)
+  const client = session?.role === 'cliente'
 
   useEffect(() => {
-    const updateRoute = () => {
-      const next = readRoute();
-      if (!getSession() && isPrivateRoute(next)) setReturnTo(window.location.hash);
-      setRoute(next);
-      setMenuOpen(false);
-    };
-    window.addEventListener("hashchange", updateRoute);
-    return () => window.removeEventListener("hashchange", updateRoute);
-  }, []);
-
-  useEffect(() => {
-    if (route.page === "inicio" && route.section) {
-      document.getElementById(route.section)?.scrollIntoView({ behavior: "auto" });
-    } else {
-      window.scrollTo({ top: 0, behavior: "auto" });
+    const update = () => {
+      const next = readRoute()
+      setRoute(next)
+      setMenuOpen(false)
+      if (next.startsWith('reservar/')) setBookingService(next.split('/')[1])
+      if (['servicios', 'estilistas'].includes(next))
+        requestAnimationFrame(() => document.getElementById(next)?.scrollIntoView())
+      else window.scrollTo({ top: 0 })
     }
-  }, [route]);
+    window.addEventListener('hashchange', update)
+    return () => window.removeEventListener('hashchange', update)
+  }, [])
 
-  useEffect(() => {
-    let active = true;
-    getPublicCatalog()
-      .then((result) => {
-        if (active) {
-          setCatalog(result);
-          setLoading(false);
-          setError("");
-        }
-      })
-      .catch((cause) => {
-        if (active) {
-          setError(cause instanceof Error ? cause.message : "Intenta de nuevo.");
-          setLoading(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [requestVersion]);
-
-  useEffect(() => {
-    if (!session || session.role !== "cliente") return;
-    let active = true;
-    getClientSelfProfile(session.id)
-      .then((result) => {
-        if (active) {
-          setAccounts([
-            {
-              id: session.id,
-              role: "cliente",
-              clientId: result.client.id,
-              name: result.client.name,
-              phone: result.client.phone,
-              email: result.client.email,
-            },
-          ]);
-          setAccountsLoading(false);
-          setAccountsError("");
-        }
-      })
-      .catch((cause) => {
-        if (active) {
-          setAccountsError(cause instanceof Error ? cause.message : "No se pudo cargar tu cuenta.");
-          setAccountsLoading(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [session, accountRequest]);
-
-  useEffect(() => {
-    if (!session && isPrivateRoute(route) && readRoute().page === route.page)
-      window.location.hash = "login";
-    else if (
-      session &&
-      (route.page === "login" || route.page === "registro") &&
-      readRoute().page === route.page
-    )
-      window.location.hash = "inicio";
-  }, [route, session]);
-
-  const accountId = session?.role === "cliente" ? session.id : "";
-  const demoClient = {
-    accounts,
-    accountsLoading,
-    accountsError,
-    accountId,
-    onRetryAccounts: () => {
-      setAccountsLoading(true);
-      setAccountsError("");
-      setAccountRequest((current) => current + 1);
-    },
-  };
-  const bookingRoute =
-    route.page === "reservar"
-      ? route
-      : route.page === "login" || route.page === "registro"
-        ? bookingHold
-        : null;
-  const isHome = route.page === "inicio";
-
-  function retry() {
-    setLoading(true);
-    setError("");
-    setRequestVersion((version) => version + 1);
-  }
-  function openBooking(serviceId: string) {
-    window.location.hash = `reservar/${serviceId}`;
-  }
-  function goAccess(mode: "login" | "registro") {
-    if (route.page === "reservar") {
-      setBookingHold(route);
-      setReturnTo(window.location.hash);
-    } else {
-      setBookingHold(null);
-      setReturnTo(null);
+  async function logout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setLogoutError('')
+    try {
+      await signOut()
+      setBookingKey((key) => key + 1)
+      window.location.hash = 'inicio'
+    } catch (cause) {
+      setLogoutError(cause instanceof Error ? cause.message : 'No se pudo cerrar sesión.')
+    } finally {
+      setLoggingOut(false)
     }
-    window.location.hash = mode;
   }
-  function signedIn(next: Session) {
-    setSession(next);
-    setAccounts([]);
-    setAccountsLoading(true);
-    const destination = returnTo ?? "#mi-perfil";
-    setReturnTo(null);
-    window.location.hash = destination;
+
+  function requireAuth() {
+    setReturnTo('reservar')
+    window.location.hash = 'login'
   }
-  function registered(client: DemoClientIdentity) {
-    const current = getSession();
-    if (!current) return;
-    setSession(current);
-    setAccounts([client]);
-    setAccountsLoading(false);
-    const destination = returnTo ?? "#mi-perfil";
-    setReturnTo(null);
-    window.location.hash = destination;
-  }
-  function logout() {
-    signOut();
-    setSession(null);
-    setAccounts([]);
-    setAccountsLoading(false);
-    setAccountsError("");
-    setReturnTo(null);
-    setBookingHold(null);
-    setBookingVersion((current) => current + 1);
-    window.location.hash = "inicio";
-  }
-  function profileSaved(updated: Client) {
-    setAccounts((current) =>
-      current.map((account) =>
-        account.clientId === updated.id
-          ? {
-              ...account,
-              name: updated.name,
-              phone: updated.phone,
-              email: updated.email,
-            }
-          : account,
-      ),
-    );
-    setSession((current) => (current ? { ...current, name: updated.name } : null));
-  }
+  const navigation = [
+    { href: '#inicio', label: 'Inicio' },
+    { href: '#servicios', label: 'Servicios' },
+    { href: '#reservar', label: 'Reservar cita' },
+  ]
 
   return (
     <div
-      className={`client-shell min-h-screen bg-ivory font-sans text-graphite ${isHome ? "client-shell--home" : ""}`}
+      className={`client-shell min-h-screen bg-ivory font-sans text-graphite ${home ? 'client-shell--home' : ''}`}
     >
-      <a
-        href="#contenido"
-        className="client-skip"
-        onClick={(event) => {
-          event.preventDefault();
-          const main = document.getElementById("contenido");
-          main?.setAttribute("tabindex", "-1");
-          main?.focus();
-        }}
-      >
-        Saltar al contenido
-      </a>
       <header
-        className={`client-header ${isHome ? "client-header--home absolute inset-x-0 top-0 z-20" : "relative z-20 border-b border-line bg-ivory"}`}
+        className={`client-header ${home ? 'client-header--home absolute inset-x-0 top-0 z-20' : 'relative z-20 border-b border-line bg-ivory'}`}
       >
-        <div className="client-container grid min-h-[88px] grid-cols-[1fr_auto_1fr] items-center gap-4 py-4 lg:min-h-[106px]">
-          <nav aria-label="Navegación principal" className="hidden items-center gap-7 lg:flex">
-            {navigation.map((item) => (
-              <a
-                key={item.page}
-                href={`#${item.page}`}
-                aria-current={(route.section ?? route.page) === item.page ? "page" : undefined}
-                className="client-nav-link"
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-          <a
-            href="#inicio"
-            className="client-nav-logo col-start-2 justify-self-center focus-visible:outline-2 focus-visible:outline-gold"
-            aria-label="MiliBrows Studio, ir al inicio"
-          >
-            <img src={logo} className="block w-[80] sm:w-[180px]" alt="" />
+        <div className="client-container flex min-h-[100px] items-center justify-between gap-5 py-4">
+          <a href="#inicio" aria-label="MiliBrows Studio, inicio">
+            <img src={logo} alt="MiliBrows Studio" className="w-[150px] sm:w-[180px]" />
           </a>
-          <div className="col-start-3 hidden items-center justify-end gap-5 lg:flex">
-            {session ? (
-              <details className="relative">
-                <summary className="client-header-action cursor-pointer list-none text-sm font-semibold focus-visible:outline-2 focus-visible:outline-gold">
-                  {session.name}
-                </summary>
-                <div className="absolute right-0 z-30 mt-3 min-w-44 rounded-[12px] border border-line bg-white p-2 text-graphite shadow-card">
-                  <a href="#mis-citas" className="block rounded-lg px-3 py-2 text-sm hover:bg-sand">
-                    Mis citas
-                  </a>
-                  <a href="#mi-perfil" className="block rounded-lg px-3 py-2 text-sm hover:bg-sand">
-                    Mi perfil
-                  </a>
-                  <button
-                    type="button"
-                    className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand"
-                    onClick={logout}
-                  >
-                    Cerrar sesión
-                  </button>
-                </div>
-              </details>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="client-header-action text-[18px] font-semibold"
-                  onClick={() => goAccess("login")}
-                >
-                  Iniciar sesión
-                </button>
-                <button
-                  type="button"
-                  className="client-header-action text-[18px] font-semibold"
-                  onClick={() => goAccess("registro")}
-                >
-                  Registrarse
-                </button>
-              </>
-            )}
-            <a href="#reservar" className="client-header-book ">
-              Reservar cita
-            </a>
-          </div>
-          {/* <button
-            type="button"
-            className="client-menu-button col-start-3 justify-self-end lg:hidden"
-            aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
-            aria-expanded={menuOpen}
-            aria-controls="mobile-menu"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <span className="client-menu-line" />
-            <span className="client-menu-line" />
-            <span className="client-menu-line" />
-          </button> */}
-        </div>
-        <nav
-          id="mobile-menu"
-          aria-label="Navegación móvil"
-          className={`${menuOpen ? "block" : "hidden"} border-t border-line bg-ivory px-6 py-4 text-graphite shadow-card lg:hidden`}
-        >
-          <div className="mx-auto flex w-full max-w-6xl flex-col">
+          <nav aria-label="Navegación principal" className="hidden items-center gap-6 lg:flex">
             {navigation.map((item) => (
-              <a
-                key={item.page}
-                href={`#${item.page}`}
-                aria-current={(route.section ?? route.page) === item.page ? "page" : undefined}
-                className="border-b border-line py-3 text-sm font-semibold"
-                onClick={() => setMenuOpen(false)}
-              >
+              <a key={item.href} href={item.href} className="client-nav-link">
                 {item.label}
               </a>
             ))}
-            <a
-              href="#reservar"
-              className="border-b border-line py-3 text-sm font-semibold"
-              onClick={() => setMenuOpen(false)}
-            >
-              Reservar cita
-            </a>
-            {session ? (
+            {client && (
               <>
-                <span className="pt-4 text-xs text-stone">{session.name}</span>
-                <a
-                  href="#mis-citas"
-                  className="border-b border-line py-3 text-sm font-semibold"
-                  onClick={() => setMenuOpen(false)}
-                >
+                <a className="client-nav-link" href="#mis-citas">
                   Mis citas
                 </a>
-                <a
-                  href="#mi-perfil"
-                  className="border-b border-line py-3 text-sm font-semibold"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  Mi perfil
+                <a className="client-nav-link" href="#mi-perfil">
+                  Mi perfil y beneficios
                 </a>
-                <button
-                  type="button"
-                  className="py-3 text-left text-sm font-semibold"
-                  onClick={logout}
-                >
-                  Cerrar sesión
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="border-b border-line py-3 text-left text-sm font-semibold"
-                  onClick={() => goAccess("login")}
-                >
-                  Iniciar sesión
-                </button>
-                <button
-                  type="button"
-                  className="py-3 text-left text-sm font-semibold"
-                  onClick={() => goAccess("registro")}
-                >
-                  Registrarse
-                </button>
               </>
             )}
-          </div>
-        </nav>
+            {session && !client && (
+              <a href={appUrl('admin', '#agenda')} className="client-nav-link">
+                Panel del personal
+              </a>
+            )}
+            {session ? (
+              <button
+                className="client-header-action text-sm font-semibold"
+                disabled={loggingOut}
+                onClick={() => {
+                  void logout()
+                }}
+              >
+                {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
+              </button>
+            ) : (
+              <a
+                href="#login"
+                className="client-header-action text-sm font-semibold"
+                onClick={() => setReturnTo('mi-perfil')}
+              >
+                Iniciar sesión
+              </a>
+            )}
+          </nav>
+          <button
+            className="client-header-action px-3 py-2 text-sm font-semibold lg:hidden"
+            type="button"
+            aria-controls="mobile-menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            {menuOpen ? 'Cerrar menú' : 'Menú'}
+          </button>
+        </div>
+        {menuOpen && (
+          <nav
+            id="mobile-menu"
+            aria-label="Navegación móvil"
+            className="flex flex-col gap-4 border-t border-line bg-ivory p-6 text-sm text-graphite lg:hidden"
+          >
+            {navigation.map((item) => (
+              <a key={item.href} href={item.href}>
+                {item.label}
+              </a>
+            ))}
+            {client && (
+              <>
+                <a href="#mis-citas">Mis citas</a>
+                <a href="#mi-perfil">Mi perfil y beneficios</a>
+              </>
+            )}
+            {session && !client && <a href={appUrl('admin', '#agenda')}>Panel del personal</a>}
+            {session ? (
+              <button
+                type="button"
+                disabled={loggingOut}
+                className="text-left"
+                onClick={() => {
+                  void logout()
+                }}
+              >
+                Cerrar sesión
+              </button>
+            ) : (
+              <a href="#login">Iniciar sesión</a>
+            )}
+          </nav>
+        )}
       </header>
-
-      {route.page === "inicio" && (
+      <div className={home ? 'absolute top-28 z-10 w-full px-5' : 'client-container'}>
+        <Feedback error={logoutError || (!home ? authError : '')} />
+      </div>
+      {home && (
         <HomePage
-          services={catalog?.services ?? null}
-          stylists={catalog?.stylists ?? null}
-          loading={loading}
-          error={error}
-          onRetry={retry}
-          onBookService={openBooking}
+          services={catalog.data?.map(mapService) ?? null}
+          loading={catalog.loading}
+          error={catalog.error}
+          onRetry={catalog.reload}
+          onBookService={(id) => {
+            setBookingService(id)
+            setBookingKey((key) => key + 1)
+            window.location.hash = `reservar/${id}`
+          }}
         />
       )}
-      {bookingRoute && (
-        <div hidden={route.page !== "reservar"}>
-          <BookingPage
-            key={`${bookingVersion}/${bookingRoute.serviceId ?? ""}`}
-            catalog={catalog}
-            loading={loading}
-            error={error}
-            onRetry={retry}
-            initialServiceId={bookingRoute.serviceId}
-            onRequireAuth={goAccess}
-            {...demoClient}
-          />
+      <div hidden={page !== 'reservar'}>
+        <BookingPage
+          key={`${bookingKey}/${bookingService ?? ''}`}
+          initialServiceId={bookingService}
+          onRequireAuth={requireAuth}
+        />
+      </div>
+      {page === 'recuperar' && (
+        <div className="px-5">
+          <PasswordRecovery />
         </div>
       )}
-      {(route.page === "login" || route.page === "registro") && !session && (
-        <ClientAccessPage mode={route.page} onSignedIn={signedIn} onRegistered={registered} />
-      )}
-      {route.page === "mis-citas" && session && (
-        <MyAppointmentsPage
-          key={accountId}
-          initialAppointmentId={route.serviceId}
-          {...demoClient}
+      {(page === 'login' || page === 'registro') && !loading && !session && (
+        <ClientAccessPage
+          key={page}
+          mode={page}
+          onSignedIn={() => {
+            window.location.hash = returnTo
+          }}
         />
       )}
-      {route.page === "mi-perfil" && session && (
-        <MyProfilePage key={accountId} {...demoClient} onProfileSaved={profileSaved} />
+      {(page === 'login' || page === 'registro' || page === 'mis-citas' || page === 'mi-perfil') &&
+        loading && (
+          <div className="client-container py-16">
+            <Feedback loading />
+          </div>
+        )}
+      {(page === 'mis-citas' || page === 'mi-perfil') && !loading && !session && (
+        <main className="client-container py-16">
+          <section className="api-panel">
+            <h1 className="font-display text-3xl">Ingresa a tu cuenta</h1>
+            <p className="my-5 text-stone">Consulta tus reservas, tu historial y tus beneficios.</p>
+            <a href="#login" className="api-primary" onClick={() => setReturnTo(route)}>
+              Iniciar sesión
+            </a>
+          </section>
+        </main>
       )}
-      {route.page === "no-encontrada" && (
-        <main id="contenido" className="client-container py-20 text-center">
-          <h1 className="font-display text-4xl">Página no encontrada.</h1>
-          <a href="#inicio" className="client-primary mt-7">
+      {session && !client && !home && (
+        <main className="client-container py-16">
+          <section className="api-panel">
+            <h1 className="font-display text-3xl">Tu cuenta pertenece al personal</h1>
+            <a href={appUrl('admin', '#agenda')} className="api-primary mt-6">
+              Ir al panel
+            </a>
+          </section>
+        </main>
+      )}
+      {(page === 'login' || page === 'registro') && client && (
+        <main className="client-container py-16">
+          <a href="#mi-perfil" className="api-primary">
+            Ir a mi perfil
+          </a>
+        </main>
+      )}
+      {page === 'mis-citas' && client && (
+        <MyAppointmentsPage
+          key={`${session.id}/${route.split('/')[1] ?? ''}`}
+          initialAppointmentId={route.split('/')[1]}
+        />
+      )}
+      {page === 'mi-perfil' && client && <MyProfilePage key={session.id} />}
+      {![
+        'inicio',
+        'servicios',
+        'estilistas',
+        'reservar',
+        'login',
+        'registro',
+        'recuperar',
+        'mis-citas',
+        'mi-perfil',
+      ].includes(page) && (
+        <main className="client-container py-20">
+          <h1 className="font-display text-4xl">Página no encontrada</h1>
+          <a href="#inicio" className="api-primary mt-6">
             Volver al inicio
           </a>
         </main>
       )}
-
       <footer className="bg-black text-white">
-        <div className="client-container grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr] lg:py-18">
+        <div className="client-container grid gap-8 py-14 sm:grid-cols-3">
           <div>
-            <p className="font-display text-3xl">
-              MiliBrows <span className="italic">Studio</span>
-            </p>
-            <p className="mt-4 max-w-[30ch] text-sm leading-relaxed text-white/80">
-              Servicios y estilistas de MiliBrows Studio.
-            </p>
+            <p className="font-display text-3xl">MiliBrows Studio</p>
+            <p className="mt-4 text-sm text-white/75">Un espacio para disfrutar cada atención.</p>
           </div>
-          <div>
-            <h2 className="text-xs font-semibold tracking-[.16em] text-champagne uppercase">
-              Explorar
-            </h2>
-            <nav
-              aria-label="Navegación del pie"
-              className="mt-4 flex flex-col items-start gap-2 text-sm"
-            >
-              {navigation.map((item) => (
-                <a
-                  key={item.page}
-                  href={`#${item.page}`}
-                  className="hover:underline focus-visible:outline-2 focus-visible:outline-champagne"
-                >
-                  {item.label}
-                </a>
-              ))}
-              <a href="#reservar" className="hover:underline">
-                Reservar cita
+          <nav aria-label="Pie de página" className="flex flex-col items-start gap-3 text-sm">
+            {navigation.map((item) => (
+              <a key={item.href} href={item.href}>
+                {item.label}
               </a>
-              <a href={appUrl("admin", "#login")} className="hover:underline">
-                Acceso del personal
-              </a>
-            </nav>
-          </div>
-          <div>
-            <h2 className="text-xs font-semibold tracking-[.16em] text-champagne uppercase">
-              Visítanos
-            </h2>
-            <p className="mt-4 text-sm text-white/85">Lunes a sábado · 10:00 a 22:00</p>
-            <p className="mt-3 text-sm text-white/75">Jirón Alberto Montellanos 289, Lima 15018</p>
-          </div>
-        </div>
-        <div className="border-t border-white/20">
-          <div className="client-container py-5 text-xs text-white/70">
-            © {new Date().getFullYear()} MiliBrows Studio
+            ))}
+            <a href={appUrl('admin', '#login')}>Acceso del personal</a>
+          </nav>
+          <div className="text-sm text-white/75">
+            <p>Jirón Alberto Montellanos 289, Lima 15018</p>
+            <p className="mt-3">Consulta los horarios disponibles al reservar.</p>
           </div>
         </div>
       </footer>
     </div>
-  );
+  )
 }
-
-export default App;
+export default App

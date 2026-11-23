@@ -1,401 +1,557 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import {
-  addPersonnelAccount,
-  changePersonnelAccountActive,
-  listPersonnelAccounts,
-} from '../../shared/agenda/mockAgendaService'
-import type { PersonnelAccountInput } from '../../shared/agenda/mockAgendaService'
-import type { AccountSummary } from '../../shared/agenda/mockAuthService'
-import { getSession } from '../../shared/agenda/mockAuthService'
-import type { AgendaData, DemoActor } from '../../shared/agenda/types'
+import { request, resource } from '../../shared/api/http'
+import { useApi } from '../../shared/api/useApi'
+import type { AppointmentDto, EmployeeDto, ServiceDto } from '../../shared/api/types'
+import { mapAppointment } from '../../shared/agenda/agendaService'
+import { restoreSession } from '../../shared/agenda/authService'
+import { Feedback, Field, Modal, ServiceResults } from '../../shared/components/Forms'
+import { ScheduleEditor } from './ScheduleEditor'
 
-const empty: PersonnelAccountInput = {
-  role: 'recepcionista',
-  name: '',
-  phone: '',
-  contactEmail: '',
-  specialty: '',
-  serviceIds: [],
-  accessEmail: '',
-  password: '',
-  confirmation: '',
-  active: true,
-}
-
-export function PersonnelAccountsSection({
-  actor,
-  data,
-  onData,
-}: {
-  actor: DemoActor
-  data: AgendaData
-  onData: (data: AgendaData) => void
-}) {
-  const [records, setRecords] = useState<AccountSummary[]>([])
-  const [loading, setLoading] = useState(true)
+function EmployeeCreator({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [value, setValue] = useState({
+    nombre: '',
+    apellido_paterno: '',
+    apellido_materno: '',
+    dni: '',
+    telefono: '',
+    correo: '',
+    contrasena: '',
+    rol: 'estilista',
+    cargo: 'Estilista',
+    admite_reservas: true,
+  })
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [request, setRequest] = useState(0)
-  const [formOpen, setFormOpen] = useState(false)
-  const [value, setValue] = useState<PersonnelAccountInput>(empty)
-  const [visible, setVisible] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [toggle, setToggle] = useState<AccountSummary | null>(null)
-  const savingRef = useRef(false)
-
-  useEffect(() => {
-    let active = true
-    listPersonnelAccounts(actor)
-      .then((items) => {
-        if (active) {
-          setRecords(items)
-          setLoading(false)
-          setError('')
-        }
-      })
-      .catch((cause) => {
-        if (active) {
-          setError(cause instanceof Error ? cause.message : 'No se pudieron cargar las cuentas.')
-          setLoading(false)
-        }
-      })
-    return () => {
-      active = false
-    }
-  }, [actor, request])
-
-  function change<K extends keyof PersonnelAccountInput>(field: K, next: PersonnelAccountInput[K]) {
-    setValue((current) => ({ ...current, [field]: next }))
-    setFormError('')
-  }
-  function retry() {
-    setLoading(true)
-    setError('')
-    setRequest((current) => current + 1)
-  }
-  async function create(event: FormEvent<HTMLFormElement>) {
+  const saving = useRef(false)
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    if (savingRef.current) return
-    setFormError('')
-    savingRef.current = true
-    setSaving(true)
+    if (saving.current) return
+    saving.current = true
+    setBusy(true)
+    setError('')
     try {
-      const result = await addPersonnelAccount(value, actor)
-      onData(result.data)
-      setRecords((current) => [...current, result.account])
-      setFormOpen(false)
-      setValue(empty)
-      setNotice(`Acceso de ${result.account.name} creado correctamente.`)
+      await resource('/empleados', 'POST', {
+        ...value,
+        nombre: value.nombre.trim(),
+        apellido_paterno: value.apellido_paterno.trim(),
+        apellido_materno: value.apellido_materno.trim() || null,
+        dni: value.dni || null,
+        telefono: value.telefono || null,
+        admite_reservas: value.rol === 'estilista' && value.admite_reservas,
+      })
+      onSaved()
     } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : 'No se pudo crear la cuenta.')
+      setError(cause instanceof Error ? cause.message : 'No se pudo crear la cuenta.')
     } finally {
-      savingRef.current = false
-      setSaving(false)
+      saving.current = false
+      setBusy(false)
     }
   }
-  async function confirmToggle() {
-    if (!toggle || savingRef.current) return
-    savingRef.current = true
-    setSaving(true)
-    setFormError('')
-    try {
-      const updated = await changePersonnelAccountActive(toggle.id, !toggle.active, actor)
-      setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)))
-      setNotice(`Cuenta de ${updated.name} ${updated.active ? 'activada' : 'desactivada'}.`)
-      setToggle(null)
-    } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : 'No se pudo cambiar el estado.')
-    } finally {
-      savingRef.current = false
-      setSaving(false)
-    }
-  }
-
-  const input = (
-    id: keyof PersonnelAccountInput,
-    label: string,
-    type: string,
-    maxLength: number,
-  ) => (
-    <div>
-      <label htmlFor={`personnel-${id}`} className="form-label">
-        {label}
-      </label>
-      <input
-        id={`personnel-${id}`}
-        className="form-input mt-1"
-        type={type}
-        maxLength={maxLength}
-        value={String(value[id] ?? '')}
-        onChange={(event) => change(id, event.target.value as never)}
-      />
-    </div>
-  )
-  const withoutAccount = data.stylists.filter(
-    (stylist) =>
-      !records.some((account) => account.role === 'estilista' && account.stylistId === stylist.id),
-  )
   return (
-    <section
-      aria-labelledby="personnel-access-title"
-      className="mt-8 rounded-card border border-line bg-white p-5 shadow-card sm:p-7"
-    >
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold tracking-[.16em] text-sage-dark uppercase">
-            Equipo y acceso
-          </p>
-          <h2 id="personnel-access-title" className="mt-2 font-display text-2xl">
-            Cuentas del personal
-          </h2>
-          <p className="mt-2 text-sm text-stone">
-            Vincula el acceso con una estilista existente o crea un perfil nuevo de estilista o
-            recepción.
-          </p>
+    <Modal title="Agregar personal" onClose={onClose} busy={busy}>
+      <form onSubmit={submit} className="space-y-5">
+        <Field
+          label="Nombre"
+          required
+          maxLength={100}
+          value={value.nombre}
+          onChange={(event) => setValue({ ...value, nombre: event.target.value })}
+        />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Apellido paterno"
+            required
+            maxLength={100}
+            value={value.apellido_paterno}
+            onChange={(event) => setValue({ ...value, apellido_paterno: event.target.value })}
+          />
+          <Field
+            label="Apellido materno (opcional)"
+            maxLength={100}
+            value={value.apellido_materno}
+            onChange={(event) => setValue({ ...value, apellido_materno: event.target.value })}
+          />
         </div>
-        <button
-          type="button"
-          className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold"
-          onClick={() => {
-            setFormOpen((current) => !current)
-            setFormError('')
-          }}
-        >
-          {formOpen ? 'Cerrar formulario' : '+ Nueva cuenta'}
-        </button>
-      </div>
-      {notice && (
-        <p role="status" className="mt-5 rounded-lg bg-[#E9EEE3] p-3 text-sm text-sage-dark">
-          {notice}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="DNI (opcional)"
+            pattern="[0-9]{8}"
+            inputMode="numeric"
+            maxLength={8}
+            value={value.dni}
+            onChange={(event) => setValue({ ...value, dni: event.target.value })}
+          />
+          <Field
+            label="Teléfono"
+            type="tel"
+            maxLength={30}
+            value={value.telefono}
+            onChange={(event) => setValue({ ...value, telefono: event.target.value })}
+          />
+        </div>
+        <Field
+          label="Correo de acceso"
+          type="email"
+          required
+          maxLength={255}
+          value={value.correo}
+          onChange={(event) => setValue({ ...value, correo: event.target.value })}
+        />
+        <Field
+          label="Contraseña inicial"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={10}
+          value={value.contrasena}
+          onChange={(event) => setValue({ ...value, contrasena: event.target.value })}
+        />
+        <p className="text-sm text-stone">
+          Usa mayúsculas, minúsculas y números. Comunica las credenciales iniciales a la persona.
         </p>
-      )}
-      {loading ? (
-        <p role="status" className="mt-6 text-sm text-stone">
-          Cargando cuentas…
-        </p>
-      ) : error ? (
-        <div role="alert" className="mt-6 text-sm text-caramel-dark">
-          {error}
-          <button type="button" className="ml-3 underline" onClick={retry}>
-            Reintentar
-          </button>
-        </div>
-      ) : (
-        <div className="mt-6 divide-y divide-line border-y border-line">
-          {records.map((account) => (
-            <div
-              key={account.id}
-              className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm"
-            >
-              <div>
-                <strong>{account.name}</strong>
-                <p className="mt-1 text-stone">
-                  {account.role === 'administrador'
-                    ? 'Administrador'
-                    : account.role === 'recepcionista'
-                      ? 'Recepcionista'
-                      : 'Estilista'}{' '}
-                  · {account.accessEmail}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${account.active ? 'bg-[#E9EEE3] text-sage-dark' : 'bg-sand text-stone'}`}
-                >
-                  {account.active ? 'Activa' : 'Inactiva'}
-                </span>
-                {account.id === getSession()?.id ? (
-                  <span className="text-xs text-stone">Tu cuenta</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="rounded-lg border border-line px-3 py-2 font-semibold hover:bg-ivory"
-                    onClick={() => {
-                      setToggle(account)
-                      setFormError('')
-                    }}
-                  >
-                    {account.active ? 'Desactivar' : 'Activar'}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {toggle && (
-        <div
-          role="group"
-          aria-label="Confirmar estado de cuenta"
-          className="mt-5 rounded-card border border-[#E7D6A5] bg-[#FFFBED] p-4 text-sm"
-        >
-          <p>
-            ¿{toggle.active ? 'Desactivar' : 'Activar'} el acceso de <strong>{toggle.name}</strong>?
-            Sus citas e historial se conservan.
-          </p>
-          {formError && (
-            <p role="alert" className="mt-2 text-caramel-dark">
-              {formError}
-            </p>
-          )}
-          <div className="mt-4 flex gap-3">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-white px-4 py-2"
-              disabled={saving}
-              onClick={() => setToggle(null)}
-            >
-              Volver
-            </button>
-            <button
-              type="button"
-              className="rounded-lg bg-gold px-4 py-2 font-semibold disabled:opacity-50"
-              disabled={saving}
-              onClick={confirmToggle}
-            >
-              {saving ? 'Guardando…' : 'Confirmar'}
-            </button>
-          </div>
-        </div>
-      )}
-      {formOpen && (
-        <form
-          noValidate
-          onSubmit={create}
-          className="mt-7 space-y-4 border-t border-line pt-6"
-          aria-busy={saving}
-        >
-          <h3 className="font-display text-xl">Crear acceso</h3>
-          <div>
-            <label htmlFor="personnel-role" className="form-label">
-              Rol *
-            </label>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <label className="text-sm font-semibold">
+            Rol
             <select
-              id="personnel-role"
-              className="form-input mt-1"
-              value={value.role}
-              onChange={(event) =>
-                change('role', event.target.value as PersonnelAccountInput['role'])
-              }
+              className="api-input mt-2"
+              value={value.rol}
+              onChange={(event) => setValue({ ...value, rol: event.target.value })}
             >
-              <option value="recepcionista">Recepcionista</option>
+              <option value="administracion">Administración</option>
+              <option value="recepcion">Recepción</option>
               <option value="estilista">Estilista</option>
             </select>
-          </div>
-          {value.role === 'estilista' && (
-            <div>
-              <label htmlFor="personnel-existing" className="form-label">
-                Perfil de estilista
-              </label>
-              <select
-                id="personnel-existing"
-                className="form-input mt-1"
-                value={value.existingStylistId ?? ''}
-                onChange={(event) => change('existingStylistId', event.target.value)}
-              >
-                <option value="">Crear estilista nueva</option>
-                {withoutAccount.map((stylist) => (
-                  <option key={stylist.id} value={stylist.id}>
-                    {stylist.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {(value.role === 'recepcionista' || !value.existingStylistId) && (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {input('name', 'Nombre completo *', 'text', 100)}
-                {input(
-                  'phone',
-                  value.role === 'recepcionista' ? 'Teléfono *' : 'Teléfono',
-                  'tel',
-                  20,
-                )}
-              </div>
-              {input('contactEmail', 'Correo de contacto (opcional)', 'email', 120)}
-              {value.role === 'estilista' && (
-                <>
-                  {input('specialty', 'Especialidad', 'text', 200)}
-                  <fieldset>
-                    <legend className="form-label">Servicios habilitados</legend>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      {data.services.map((service) => (
-                        <label
-                          key={service.id}
-                          className="rounded-lg border border-line p-3 text-sm"
-                        >
-                          <input
-                            type="checkbox"
-                            className="mr-2 accent-[#C9A24B]"
-                            checked={value.serviceIds.includes(service.id)}
-                            onChange={() =>
-                              change(
-                                'serviceIds',
-                                value.serviceIds.includes(service.id)
-                                  ? value.serviceIds.filter((id) => id !== service.id)
-                                  : [...value.serviceIds, service.id],
-                              )
-                            }
-                          />
-                          {service.name}
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                </>
-              )}
-            </>
-          )}
-          <div className="grid gap-4 sm:grid-cols-2">
-            {input('accessEmail', 'Correo de acceso *', 'email', 120)}
-            <label className="flex items-center gap-2 pt-5 text-sm">
-              <input
-                type="checkbox"
-                className="accent-[#C9A24B]"
-                checked={value.active}
-                onChange={(event) => change('active', event.target.checked)}
-              />
-              Cuenta activa
-            </label>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {input('password', 'Contraseña inicial *', visible ? 'text' : 'password', 100)}
-            {input('confirmation', 'Confirmar contraseña *', visible ? 'text' : 'password', 100)}
-          </div>
+          </label>
+          <Field
+            label="Cargo"
+            required
+            maxLength={255}
+            value={value.cargo}
+            onChange={(event) => setValue({ ...value, cargo: event.target.value })}
+          />
+        </div>
+        {value.rol === 'estilista' && (
+          <label className="flex gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={value.admite_reservas}
+              onChange={(event) => setValue({ ...value, admite_reservas: event.target.checked })}
+            />
+            Admite reservas
+          </label>
+        )}
+        <p className="text-sm text-stone">
+          Después de crear la cuenta, configura sus servicios y jornada para habilitar sus horarios.
+        </p>
+        <Feedback error={error} />
+        <button disabled={busy} className="api-primary">
+          {busy ? 'Creando…' : 'Crear cuenta y perfil'}
+        </button>
+      </form>
+    </Modal>
+  )
+}
+
+function EmployeeEditor({
+  initial,
+  services,
+  onClose,
+  onSaved,
+}: {
+  initial: EmployeeDto
+  services: ServiceDto[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [tab, setTab] = useState('perfil')
+  const [schedule, setSchedule] = useState(initial.jornada)
+  const [profile, setProfile] = useState({
+    nombre: initial.cuenta.persona?.nombre ?? '',
+    apellido_paterno: initial.cuenta.persona?.apellido_paterno ?? '',
+    apellido_materno: initial.cuenta.persona?.apellido_materno ?? '',
+    telefono: initial.cuenta.persona?.telefono ?? '',
+    correo_contacto: initial.cuenta.persona?.correo_contacto ?? '',
+    cargo: initial.cargo,
+    activo: initial.activo,
+    admite_reservas: initial.admite_reservas,
+  })
+  const [account, setAccount] = useState({
+    correo: initial.cuenta.correo,
+    rol: initial.cuenta.roles[0],
+    activo: initial.cuenta.activo,
+  })
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [serviceIds, setServiceIds] = useState(
+    initial.servicios.filter((item) => item.pivot?.activo ?? true).map((item) => item.id),
+  )
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const saving = useRef(false)
+  const history = useApi<AppointmentDto[]>(
+    tab === 'atenciones' ? `/empleados/${initial.id}/atenciones` : null,
+    true,
+  )
+
+  async function save(event: FormEvent) {
+    event.preventDefault()
+    if (saving.current) return
+    if (tab === 'contrasena' && password !== confirmation) {
+      setError('Las contraseñas no coinciden.')
+      return
+    }
+    saving.current = true
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const path = `/empleados/${initial.id}`
+      if (tab === 'perfil')
+        await resource(path, 'PATCH', {
+          ...profile,
+          nombre: profile.nombre.trim(),
+          apellido_paterno: profile.apellido_paterno.trim(),
+          apellido_materno: profile.apellido_materno.trim() || null,
+          telefono: profile.telefono || null,
+          correo_contacto: profile.correo_contacto || null,
+        })
+      if (tab === 'cuenta') {
+        await resource(`${path}/cuenta`, 'PATCH', account)
+        if (account.rol !== 'estilista')
+          setProfile((current) => ({ ...current, admite_reservas: false }))
+      }
+      if (tab === 'contrasena')
+        await request(`${path}/cuenta/contrasena`, 'PUT', { contrasena: password })
+      if (tab === 'servicios')
+        await resource(`${path}/servicios`, 'PUT', { ids_servicios: serviceIds })
+      setPassword('')
+      setConfirmation('')
+      setNotice('Cambios guardados correctamente.')
+      onSaved()
+      if (tab === 'cuenta' || tab === 'contrasena') void restoreSession()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudieron guardar los cambios.')
+    } finally {
+      saving.current = false
+      setBusy(false)
+    }
+  }
+
+  const tabs = [
+    { id: 'perfil', label: 'Perfil' },
+    { id: 'cuenta', label: 'Acceso' },
+    { id: 'contrasena', label: 'Contraseña' },
+    { id: 'servicios', label: 'Servicios' },
+    { id: 'jornada', label: 'Jornada' },
+    { id: 'atenciones', label: 'Atenciones' },
+  ]
+  return (
+    <Modal
+      title={initial.cuenta.persona?.nombre_completo ?? initial.cargo}
+      busy={busy}
+      onClose={onClose}
+    >
+      <nav aria-label="Configuración del empleado" className="mb-6 flex flex-wrap gap-2">
+        {tabs.map((item) => (
           <button
             type="button"
-            className="text-sm font-semibold text-caramel-dark underline"
-            onClick={() => setVisible((current) => !current)}
+            key={item.id}
+            disabled={busy}
+            className={tab === item.id ? 'api-primary' : 'api-secondary'}
+            onClick={() => {
+              setTab(item.id)
+              setError('')
+              setNotice('')
+            }}
           >
-            {visible ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+            {item.label}
           </button>
-          {formError && (
-            <p role="alert" className="rounded-lg bg-[#FAF0EA] p-3 text-sm text-caramel-dark">
-              {formError}
-            </p>
+        ))}
+      </nav>
+      {tab === 'jornada' ? (
+        <ScheduleEditor
+          initial={schedule}
+          onSave={async (rows) => {
+            setSchedule(
+              await resource(`/empleados/${initial.id}/jornada`, 'PUT', { jornada: rows }),
+            )
+            onSaved()
+          }}
+        />
+      ) : tab === 'atenciones' ? (
+        <>
+          <Feedback loading={history.loading} error={history.error} onRetry={history.reload} />
+          {history.data?.map(mapAppointment).map((item) => (
+            <article className="mb-4 rounded-card border border-line p-4" key={item.id}>
+              <h3 className="font-semibold">
+                {item.date} · {item.client?.name}
+              </h3>
+              <ServiceResults services={item.services} />
+            </article>
+          ))}
+          {history.data?.length === 0 && (
+            <p className="text-sm text-stone">Aún no hay atenciones completadas.</p>
           )}
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
-            >
-              {saving ? 'Guardando…' : 'Crear cuenta'}
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              className="rounded-lg border border-line px-5 py-2.5 text-sm"
-              onClick={() => setFormOpen(false)}
-            >
-              Cancelar
-            </button>
-          </div>
+        </>
+      ) : (
+        <form onSubmit={save} className="space-y-5">
+          <fieldset disabled={busy} className="space-y-5">
+            {tab === 'perfil' && (
+              <>
+                <Field
+                  label="Nombre"
+                  required
+                  maxLength={100}
+                  value={profile.nombre}
+                  onChange={(event) => setProfile({ ...profile, nombre: event.target.value })}
+                />
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <Field
+                    label="Apellido paterno"
+                    required
+                    maxLength={100}
+                    value={profile.apellido_paterno}
+                    onChange={(event) =>
+                      setProfile({ ...profile, apellido_paterno: event.target.value })
+                    }
+                  />
+                  <Field
+                    label="Apellido materno (opcional)"
+                    maxLength={100}
+                    value={profile.apellido_materno}
+                    onChange={(event) =>
+                      setProfile({ ...profile, apellido_materno: event.target.value })
+                    }
+                  />
+                </div>
+                <Field
+                  label="Cargo"
+                  required
+                  maxLength={255}
+                  value={profile.cargo}
+                  onChange={(event) => setProfile({ ...profile, cargo: event.target.value })}
+                />
+                <Field
+                  label="Teléfono"
+                  type="tel"
+                  maxLength={30}
+                  value={profile.telefono}
+                  onChange={(event) => setProfile({ ...profile, telefono: event.target.value })}
+                />
+                <Field
+                  label="Correo de contacto"
+                  type="email"
+                  maxLength={255}
+                  value={profile.correo_contacto}
+                  onChange={(event) =>
+                    setProfile({ ...profile, correo_contacto: event.target.value })
+                  }
+                />
+                <label className="flex gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={profile.activo}
+                    onChange={(event) => setProfile({ ...profile, activo: event.target.checked })}
+                  />
+                  Perfil activo
+                </label>
+                {account.rol === 'estilista' && (
+                  <label className="flex gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={profile.admite_reservas}
+                      onChange={(event) =>
+                        setProfile({ ...profile, admite_reservas: event.target.checked })
+                      }
+                    />
+                    Admite reservas
+                  </label>
+                )}
+              </>
+            )}
+            {tab === 'cuenta' && (
+              <>
+                <Field
+                  label="Correo de acceso"
+                  type="email"
+                  required
+                  maxLength={255}
+                  value={account.correo}
+                  onChange={(event) => setAccount({ ...account, correo: event.target.value })}
+                />
+                <label className="block text-sm font-semibold">
+                  Rol
+                  <select
+                    className="api-input mt-2"
+                    value={account.rol}
+                    onChange={(event) =>
+                      setAccount({ ...account, rol: event.target.value as typeof account.rol })
+                    }
+                  >
+                    <option value="administracion">Administración</option>
+                    <option value="recepcion">Recepción</option>
+                    <option value="estilista">Estilista</option>
+                  </select>
+                </label>
+                <label className="flex gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={account.activo}
+                    onChange={(event) => setAccount({ ...account, activo: event.target.checked })}
+                  />
+                  Acceso activo
+                </label>
+                <p className="text-sm text-stone">
+                  Guardar cambios de acceso cerrará las sesiones anteriores de esta persona.
+                </p>
+              </>
+            )}
+            {tab === 'contrasena' && (
+              <>
+                <Field
+                  label="Nueva contraseña"
+                  type="password"
+                  minLength={10}
+                  required
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <Field
+                  label="Confirmar contraseña"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                />
+                <p className="text-sm text-stone">
+                  Usa mayúsculas, minúsculas y números. Las sesiones anteriores se cerrarán.
+                </p>
+              </>
+            )}
+            {tab === 'servicios' && (
+              <div className="space-y-4">
+                {services.map((item) => (
+                  <label key={item.id} className="flex gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={serviceIds.includes(item.id)}
+                      onChange={() =>
+                        setServiceIds((current) =>
+                          current.includes(item.id)
+                            ? current.filter((id) => id !== item.id)
+                            : [...current, item.id],
+                        )
+                      }
+                    />
+                    {item.nombre}
+                    {!item.activo && ' (inactivo)'}
+                  </label>
+                ))}
+              </div>
+            )}
+          </fieldset>
+          <Feedback error={error} notice={notice} />
+          <button disabled={busy} className="api-primary">
+            {busy ? 'Guardando…' : 'Guardar cambios'}
+          </button>
         </form>
       )}
-    </section>
+    </Modal>
+  )
+}
+
+export function PersonnelAccountsSection() {
+  const employees = useApi<EmployeeDto[]>('/empleados', true)
+  const services = useApi<ServiceDto[]>('/administracion/servicios', true)
+  const [editing, setEditing] = useState<EmployeeDto | 'new' | null>(null)
+  const [search, setSearch] = useState('')
+  const [notice, setNotice] = useState('')
+  const visible = (employees.data ?? []).filter((item) =>
+    `${item.cuenta.persona?.nombre_completo} ${item.cuenta.correo} ${item.cargo}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  )
+  return (
+    <main className="mx-auto max-w-6xl space-y-7 px-5 py-8 sm:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl">Personal</h1>
+          <p className="mt-2 text-sm text-stone">
+            Cuentas, servicios habilitados y jornadas del equipo.
+          </p>
+        </div>
+        <button className="api-primary" onClick={() => setEditing('new')}>
+          Agregar personal
+        </button>
+      </div>
+      <Feedback
+        loading={employees.loading}
+        error={employees.error || services.error}
+        notice={notice}
+        onRetry={() => {
+          employees.reload()
+          services.reload()
+        }}
+      />
+      <section className="api-panel">
+        <Field
+          label="Buscar por nombre, correo o cargo"
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="mt-6 divide-y divide-line">
+          {visible.map((item) => (
+            <article
+              key={item.id}
+              className="flex flex-wrap items-center justify-between gap-4 py-5"
+            >
+              <div>
+                <h2 className="font-semibold">{item.cuenta.persona?.nombre_completo}</h2>
+                <p className="mt-2 text-sm text-stone">
+                  {item.cargo} · {item.cuenta.correo}
+                </p>
+                <p className="mt-1 text-xs text-stone">
+                  {item.activo && item.cuenta.activo ? 'Acceso activo' : 'Acceso inactivo'} ·{' '}
+                  {item.admite_reservas ? 'Admite reservas' : 'Sin reservas asignables'}
+                </p>
+              </div>
+              <button
+                className="api-secondary"
+                disabled={!services.data}
+                onClick={() => setEditing(item)}
+              >
+                Gestionar
+              </button>
+            </article>
+          ))}
+        </div>
+        {!employees.loading && !visible.length && (
+          <p className="mt-6 text-sm text-stone">No hay personal para mostrar.</p>
+        )}
+      </section>
+      {editing === 'new' && (
+        <EmployeeCreator
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            employees.reload()
+            setNotice('Cuenta creada. Configura sus servicios y jornada desde Gestionar.')
+          }}
+        />
+      )}
+      {editing && editing !== 'new' && (
+        <EmployeeEditor
+          initial={editing}
+          services={services.data ?? []}
+          onClose={() => setEditing(null)}
+          onSaved={employees.reload}
+        />
+      )}
+    </main>
   )
 }

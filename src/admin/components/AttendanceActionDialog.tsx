@@ -1,200 +1,169 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { dateFromKey, endTime } from '../../shared/agenda/dates'
-import {
-  AgendaOperationError,
-  completeAppointment,
-  markNoShow,
-} from '../../shared/agenda/mockAgendaService'
-import type {
-  AgendaData,
-  Appointment,
-  CreatedAppointment,
-  DemoActor,
-} from '../../shared/agenda/types'
-import { Icon } from './Icon'
+import { resource } from '../../shared/api/http'
+import type { AppointmentDto } from '../../shared/api/types'
+import { mapAppointment } from '../../shared/agenda/agendaService'
+import type { Appointment, CreatedAppointment } from '../../shared/agenda/types'
+import { Feedback, Modal } from '../../shared/components/Forms'
 
 export type AttendanceAction = 'complete' | 'noShow'
 
-const fullDate = new Intl.DateTimeFormat('es-PE', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-})
-
-interface AttendanceActionDialogProps {
-  appointment: Appointment
-  data: AgendaData
-  actor: DemoActor
-  action: AttendanceAction
-  onClose: () => void
-  onUpdated: (result: CreatedAppointment, action: AttendanceAction) => void
-}
-
 export function AttendanceActionDialog({
   appointment,
-  data,
-  actor,
   action,
   onClose,
   onUpdated,
-}: AttendanceActionDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-  const savingRef = useRef(false)
-  const [notes, setNotes] = useState('')
-  const [notesError, setNotesError] = useState('')
-  const [generalError, setGeneralError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const isCompletion = action === 'complete'
-
-  useEffect(() => {
-    dialogRef.current?.showModal()
-  }, [])
-
-  const client = data.clients.find((item) => item.id === appointment.clientId)
-  const stylist = data.stylists.find((item) => item.id === appointment.stylistId)
-  const duration = appointment.services.reduce(
-    (total, service) => total + service.agreedDuration,
-    0,
+}: {
+  appointment: Appointment
+  action: AttendanceAction
+  onClose: () => void
+  onUpdated: (result: CreatedAppointment, action: AttendanceAction) => void
+}) {
+  const [results, setResults] = useState(
+    appointment.services.map((service) => ({
+      id_servicio_cita: Number(service.id),
+      estado_servicio: 'realizado',
+      motivo_estado_servicio: '',
+    })),
   )
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  const [description, setDescription] = useState('')
+  const [notes, setNotes] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const saving = useRef(false)
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    if (savingRef.current) return
-    setNotesError('')
-    setGeneralError('')
-    savingRef.current = true
-    setSaving(true)
-    try {
-      const result = isCompletion
-        ? await completeAppointment(appointment.id, notes, actor)
-        : await markNoShow(appointment.id, notes, actor)
-      onUpdated(result, action)
-    } catch (cause) {
-      if (cause instanceof AgendaOperationError && cause.field === 'attendanceNotes')
-        setNotesError(cause.message)
-      else
-        setGeneralError(
-          cause instanceof Error
-            ? cause.message
-            : 'No se pudo actualizar la cita. Intenta de nuevo.',
+    if (saving.current) return
+    if (action === 'complete') {
+      if (!results.some((item) => item.estado_servicio === 'realizado')) {
+        setError('Para completar la cita debe realizarse al menos un servicio.')
+        return
+      }
+      if (
+        results.some(
+          (item) => item.estado_servicio !== 'realizado' && !item.motivo_estado_servicio.trim(),
         )
-      savingRef.current = false
-      setSaving(false)
+      ) {
+        setError('Indica el motivo de cada servicio cancelado o no realizado.')
+        return
+      }
+    }
+    saving.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const response = await resource<AppointmentDto>(
+        `/citas/${appointment.id}/${action === 'complete' ? 'completar' : 'marcar-inasistencia'}`,
+        'POST',
+        action === 'complete'
+          ? {
+              servicios: results.map((item) => ({
+                id_servicio_cita: item.id_servicio_cita,
+                estado_servicio: item.estado_servicio,
+                motivo_estado_servicio:
+                  item.estado_servicio === 'realizado' ? null : item.motivo_estado_servicio.trim(),
+              })),
+              nota: { descripcion_tratamiento: description || null, observaciones: notes || null },
+            }
+          : undefined,
+      )
+      onUpdated({ appointment: mapAppointment(response) }, action)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo cerrar la atención.')
+    } finally {
+      saving.current = false
+      setBusy(false)
     }
   }
-
   return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby="attendance-action-title"
-      className="appointment-dialog bg-white text-graphite"
+    <Modal
+      title={action === 'complete' ? 'Completar atención' : 'Registrar inasistencia'}
+      busy={busy}
       onClose={onClose}
-      onCancel={(event) => {
-        if (savingRef.current) event.preventDefault()
-      }}
-      onClick={(event) => {
-        if (event.target === dialogRef.current && !savingRef.current) dialogRef.current?.close()
-      }}
     >
-      <form noValidate onSubmit={submit} aria-busy={saving}>
-        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-5 sm:px-7">
-          <div>
-            <p className="text-xs font-semibold tracking-[.16em] text-caramel-dark uppercase">
-              Agenda · Cita {appointment.id.toUpperCase()}
-            </p>
-            <h2 id="attendance-action-title" className="mt-1 font-display text-3xl">
-              {isCompletion ? 'Completar atención' : 'Registrar inasistencia'}
-            </h2>
-          </div>
-          <button
-            type="button"
-            aria-label="Cerrar formulario"
-            className="icon-button"
-            disabled={saving}
-            onClick={() => dialogRef.current?.close()}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-
-        <div className="px-5 py-6 sm:px-7">
-          <p className="text-sm text-stone">
-            {isCompletion
-              ? 'Confirma que la atención ha terminado.'
-              : 'Confirma que la cliente no asistió a esta cita.'}
-          </p>
-          <div className="mt-5 rounded-card border border-line bg-ivory p-4 text-sm">
-            <p className="font-semibold">{client?.name}</p>
-            <p className="mt-1 text-stone">{fullDate.format(dateFromKey(appointment.date))}</p>
-            <p className="mt-1 text-stone">
-              {appointment.startTime} – {endTime(appointment.startTime, duration)} · {stylist?.name}
-            </p>
-            <ul className="mt-3 list-inside list-disc border-t border-line pt-3 text-stone">
-              {appointment.services.map((service) => (
-                <li key={service.serviceId}>
-                  {service.serviceName} · {service.agreedDuration} min
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="mt-5">
-            <label className="form-label" htmlFor="attendance-notes">
-              {isCompletion ? 'Observación de la atención' : 'Observación de la inasistencia'}{' '}
-              (opcional)
+      <form onSubmit={submit} className="space-y-6">
+        <p className="text-sm text-stone">
+          Cita {appointment.id} · {appointment.date} · {appointment.startTime}
+        </p>
+        {action === 'complete' ? (
+          <>
+            {appointment.services.map((service, index) => (
+              <section key={service.id} className="rounded-card border border-line p-4">
+                <h3 className="mb-3 font-semibold">
+                  {service.serviceName} · {service.stylistName}
+                </h3>
+                <label className="block text-sm">
+                  Resultado
+                  <select
+                    className="api-input mt-2"
+                    value={results[index].estado_servicio}
+                    onChange={(event) =>
+                      setResults((current) =>
+                        current.map((item, position) =>
+                          position === index
+                            ? { ...item, estado_servicio: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="realizado">Realizado</option>
+                    <option value="cancelado">Cancelado</option>
+                    <option value="no_realizado">No realizado</option>
+                  </select>
+                </label>
+                {results[index].estado_servicio !== 'realizado' && (
+                  <label className="mt-4 block text-sm">
+                    Motivo
+                    <textarea
+                      className="api-input mt-2"
+                      maxLength={2000}
+                      required
+                      value={results[index].motivo_estado_servicio}
+                      onChange={(event) =>
+                        setResults((current) =>
+                          current.map((item, position) =>
+                            position === index
+                              ? { ...item, motivo_estado_servicio: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                )}
+              </section>
+            ))}
+            <label className="block text-sm font-semibold">
+              Descripción del tratamiento
+              <textarea
+                className="api-input mt-2 min-h-24"
+                maxLength={5000}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
             </label>
-            <textarea
-              id="attendance-notes"
-              className="form-input mt-1 min-h-28 resize-y"
-              value={notes}
-              maxLength={500}
-              aria-invalid={!!notesError}
-              aria-describedby={notesError ? 'attendance-notes-error' : undefined}
-              onChange={(event) => {
-                setNotes(event.target.value)
-                setNotesError('')
-              }}
-              placeholder="Agrega una observación si corresponde"
-            />
-            {notesError && (
-              <p id="attendance-notes-error" role="alert" className="field-error">
-                {notesError}
-              </p>
-            )}
-          </div>
-          {generalError && (
-            <p
-              role="alert"
-              className="mt-4 rounded-lg bg-[#FAF0EA] px-3 py-2 text-sm text-caramel-dark"
-            >
-              {generalError}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-5 py-4 sm:px-7">
-          <button
-            type="button"
-            className="rounded-lg border border-line px-5 py-2.5 text-sm font-semibold hover:bg-ivory disabled:opacity-50"
-            disabled={saving}
-            onClick={() => dialogRef.current?.close()}
-          >
-            Volver
-          </button>
-          <button
-            type="submit"
-            className="rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-graphite hover:bg-[#D7B65F] disabled:cursor-wait disabled:opacity-60"
-            disabled={saving}
-          >
-            {saving
-              ? 'Guardando…'
-              : isCompletion
-                ? 'Confirmar atención terminada'
-                : 'Confirmar inasistencia'}
-          </button>
-        </div>
+            <label className="block text-sm font-semibold">
+              Observaciones internas
+              <textarea
+                className="api-input mt-2 min-h-24"
+                maxLength={5000}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
+            </label>
+          </>
+        ) : (
+          <p className="rounded-card bg-sand p-5 text-sm">
+            Confirma que la cliente no asistió. Se registrará el resultado de los servicios de esta
+            cita.
+          </p>
+        )}
+        <Feedback error={error} />
+        <button disabled={busy} className="api-primary">
+          {busy ? 'Guardando…' : 'Confirmar cierre'}
+        </button>
       </form>
-    </dialog>
+    </Modal>
   )
 }

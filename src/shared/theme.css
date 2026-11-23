@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   --color-ivory: #faf8f5;
@@ -14,8 +14,80 @@
   --color-sage-dark: #666b54;
   --color-caramel: #a9714f;
   --color-caramel-dark: #945f40;
-  --font-sans: "Inter", sans-serif;
-  --font-display: "Poppins", sans-serif;
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Poppins', sans-serif;
   --radius-card: 12px;
   --shadow-card: 0 8px 24px rgb(43 43 43 / 4%);
+}
+
+.api-input {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-white);
+  padding: 12px 14px;
+  color: var(--color-graphite);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+}
+.api-input:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+.api-primary,
+.api-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.api-primary {
+  background: var(--color-gold);
+  color: var(--color-graphite);
+}
+.api-secondary {
+  border: 1px solid var(--color-line);
+  background: var(--color-white);
+}
+.api-primary:hover {
+  background: var(--color-champagne);
+}
+.api-secondary:hover {
+  background: var(--color-sand);
+}
+:is(.api-primary, .api-secondary):disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+:is(.api-primary, .api-secondary):focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+}
+.api-panel {
+  border: 1px solid var(--color-line);
+  border-radius: 20px;
+  background: var(--color-white);
+  padding: clamp(20px, 4vw, 32px);
+  box-shadow: var(--shadow-card);
+}
+.api-modal {
+  width: min(760px, calc(100% - 24px));
+  max-height: 90dvh;
+  margin: auto;
+  overflow-y: auto;
+  border: 1px solid var(--color-line);
+  border-radius: 20px;
+  background: var(--color-white);
+  color: var(--color-graphite);
+}
+.api-modal::backdrop {
+  background: rgb(43 43 43 / 45%);
 }
