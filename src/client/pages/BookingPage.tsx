@@ -20,7 +20,7 @@ export function BookingPage({
   const created =
     confirmation && confirmation.accountId === session?.id ? confirmation.appointment : null
   return (
-    <main id="booking-content" className="client-container py-12 sm:py-18">
+    <main id="booking-content" className="client-container py-12 sm:py-16">
       <div className="mx-auto max-w-4xl">
         <h1 className="font-display text-4xl sm:text-5xl">
           {created ? 'Tu cita está confirmada' : 'Reserva tu próxima visita'}
@@ -32,16 +32,18 @@ export function BookingPage({
                 Cita {created.id} · {created.date} · {created.startTime} · {created.stylistName}
               </p>
               <ServiceResults services={created.services} />
-              <a className="api-primary mt-6" href={`#mis-citas/${created.id}`}>
-                Ver mi cita
-              </a>
-              <button
-                type="button"
-                className="api-secondary ml-3 mt-6"
-                onClick={() => setConfirmation(null)}
-              >
-                Reservar otra cita
-              </button>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <a className="api-primary" href={`#mis-citas/${created.id}`}>
+                  Ver mi cita
+                </a>
+                <button
+                  type="button"
+                  className="api-secondary"
+                  onClick={() => setConfirmation(null)}
+                >
+                  Reservar otra cita
+                </button>
+              </div>
             </>
           ) : (
             <BookingForm

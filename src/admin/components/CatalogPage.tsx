@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { apiAssetUrl, resource } from '../../shared/api/http'
+import { apiAssetUrl, request, resource } from '../../shared/api/http'
 import { useApi } from '../../shared/api/useApi'
 import type { ServiceDto } from '../../shared/api/types'
 import { Feedback, Field, Modal } from '../../shared/components/Forms'
@@ -9,10 +9,12 @@ function ServiceEditor({
   record,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   record: ServiceDto | null
   onClose: () => void
   onSaved: () => void
+  onDeleted?: () => void
 }) {
   const [name, setName] = useState(record?.nombre ?? '')
   const [description, setDescription] = useState(record?.descripcion ?? '')
@@ -24,6 +26,8 @@ function ServiceEditor({
   const [duration, setDuration] = useState(String(record?.duracion_minutos ?? 30))
   const [active, setActive] = useState(record?.activo ?? true)
   const [visible, setVisible] = useState(record?.visible_al_publico ?? true)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const saving = useRef(false)
@@ -56,6 +60,24 @@ function ServiceEditor({
     } finally {
       saving.current = false
       setBusy(false)
+    }
+  }
+  async function deleteService() {
+    if (!record || saving.current) return
+    saving.current = true
+    setBusy(true)
+    setDeleting(true)
+    setError('')
+    try {
+      await request(`/administracion/servicios/${record.id}`, 'DELETE')
+      onDeleted?.()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo eliminar el servicio.')
+      setConfirmDelete(false)
+    } finally {
+      saving.current = false
+      setBusy(false)
+      setDeleting(false)
     }
   }
   return (
@@ -176,9 +198,49 @@ function ServiceEditor({
             Visible en el portal de clientes
           </label>
           <Feedback error={error} />
-          <button className="api-primary" disabled={busy}>
-            {busy ? 'Guardando…' : 'Guardar servicio'}
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <button className="api-primary" disabled={busy}>
+              {busy && !deleting ? 'Guardando…' : 'Guardar servicio'}
+            </button>
+            {record && !confirmDelete && (
+              <button
+                type="button"
+                className="api-secondary text-caramel-dark"
+                disabled={busy}
+                onClick={() => {
+                  setConfirmDelete(true)
+                  setError('')
+                }}
+              >
+                Eliminar servicio
+              </button>
+            )}
+          </div>
+          {record && confirmDelete && (
+            <div className="rounded-card border border-[#E8CFC0] bg-[#FAF0EA] p-4 text-sm">
+              <p className="font-semibold text-caramel-dark">
+                ¿Eliminar «{record.nombre}»? Esta acción no se puede deshacer.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void deleteService()}
+                  className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-full bg-caramel-dark px-5 py-2 text-sm font-semibold text-white transition hover:bg-caramel disabled:cursor-wait disabled:opacity-60"
+                >
+                  {deleting ? 'Eliminando…' : 'Confirmar eliminación'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="api-secondary"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </fieldset>
       </form>
     </Modal>
@@ -221,34 +283,56 @@ export function CatalogPage() {
           {visible.map((item) => (
             <article
               key={item.id}
-              className="flex flex-wrap items-center justify-between gap-4 py-5"
+              className="flex flex-wrap items-center justify-between gap-5 py-5"
             >
-              <div>
-                <h2 className="font-semibold">{item.nombre}</h2>
-                {item.imagen_url && (
-                  <img
-                    src={apiAssetUrl(item.imagen_url)}
-                    alt=""
-                    loading="lazy"
-                    className="mt-3 h-24 w-40 rounded-card object-cover"
-                  />
-                )}
-                {item.descripcion && (
-                  <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm text-stone">
-                    {item.descripcion}
+              <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="h-20 w-32 shrink-0 overflow-hidden rounded-card bg-sand">
+                  {item.imagen_url ? (
+                    <img
+                      src={apiAssetUrl(item.imagen_url)}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center text-xs font-medium text-stone">
+                      Sin imagen
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-semibold">{item.nombre}</h2>
+                  {item.descripcion && (
+                    <p className="mt-1 line-clamp-2 max-w-2xl text-sm text-stone">
+                      {item.descripcion}
+                    </p>
+                  )}
+                  <p className="mt-2 text-sm text-stone">
+                    {item.duracion_minutos} min · S/ {item.precio}
                   </p>
-                )}
-                <p className="mt-2 text-sm text-stone">
-                  {item.duracion_minutos} min · S/ {item.precio}
-                </p>
-                <p className="mt-1 text-xs text-stone">
-                  {item.activo ? 'Activo' : 'Inactivo'} ·{' '}
-                  {item.visible_al_publico ? 'Público' : 'Uso interno'}
-                </p>
+                  <p className="mt-1 text-xs text-stone">
+                    {item.visible_al_publico ? 'Visible al público' : 'Solo uso interno'}
+                  </p>
+                </div>
               </div>
-              <button className="api-secondary" onClick={() => setServiceEditor(item)}>
-                Editar
-              </button>
+              <div className="flex shrink-0 items-center gap-3">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap ${
+                    item.activo
+                      ? 'bg-status-active-bg text-status-active-text'
+                      : 'bg-status-inactive-bg text-status-inactive-text'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`size-2 rounded-full ${item.activo ? 'bg-status-active-dot' : 'bg-status-inactive-dot'}`}
+                  />
+                  {item.activo ? 'Activo' : 'Inactivo'}
+                </span>
+                <button className="api-secondary shrink-0" onClick={() => setServiceEditor(item)}>
+                  Editar
+                </button>
+              </div>
             </article>
           ))}
         </div>
@@ -264,6 +348,11 @@ export function CatalogPage() {
             setServiceEditor(null)
             services.reload()
             setNotice('Servicio guardado correctamente.')
+          }}
+          onDeleted={() => {
+            setServiceEditor(null)
+            services.reload()
+            setNotice('Servicio eliminado correctamente.')
           }}
         />
       )}

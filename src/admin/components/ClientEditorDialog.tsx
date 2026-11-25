@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import { request } from '../../shared/api/http'
 import { AgendaOperationError, createClient, updateClient } from '../../shared/agenda/agendaService'
 import type { Client, ClientInput, ClientRecordResult, Actor } from '../../shared/agenda/types'
 import { ClientFields } from './ClientFields'
@@ -10,9 +11,15 @@ interface ClientEditorDialogProps {
   actor: Actor
   onClose: () => void
   onSaved: (result: ClientRecordResult) => void
+  onDeleted?: () => void
 }
 
-export function ClientEditorDialog({ client, onClose, onSaved }: ClientEditorDialogProps) {
+export function ClientEditorDialog({
+  client,
+  onClose,
+  onSaved,
+  onDeleted,
+}: ClientEditorDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const savingRef = useRef(false)
   const [value, setValue] = useState<ClientInput>({
@@ -27,6 +34,8 @@ export function ClientEditorDialog({ client, onClose, onSaved }: ClientEditorDia
   })
   const [errors, setErrors] = useState<Partial<Record<keyof ClientInput, string>>>({})
   const [generalError, setGeneralError] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -66,6 +75,27 @@ export function ClientEditorDialog({ client, onClose, onSaved }: ClientEditorDia
         )
       savingRef.current = false
       setSaving(false)
+    }
+  }
+
+  async function deleteClientRecord() {
+    if (!client || savingRef.current) return
+    setErrors({})
+    setGeneralError('')
+    savingRef.current = true
+    setSaving(true)
+    setDeleting(true)
+    try {
+      await request(`/clientes/${client.id}`, 'DELETE')
+      onDeleted?.()
+    } catch (cause) {
+      setGeneralError(
+        cause instanceof Error ? cause.message : 'No se pudo eliminar la ficha del cliente.',
+      )
+      setConfirmDelete(false)
+      savingRef.current = false
+      setSaving(false)
+      setDeleting(false)
     }
   }
 
@@ -127,23 +157,65 @@ export function ClientEditorDialog({ client, onClose, onSaved }: ClientEditorDia
               {generalError}
             </p>
           )}
+          {client && confirmDelete && (
+            <div className="mt-4 rounded-card border border-[#E8CFC0] bg-[#FAF0EA] p-4 text-sm">
+              <p className="font-semibold text-caramel-dark">
+                ¿Eliminar a «{client.name}»? Esta acción no se puede deshacer.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void deleteClientRecord()}
+                  className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-full bg-caramel-dark px-5 py-2 text-sm font-semibold text-white transition hover:bg-caramel disabled:cursor-wait disabled:opacity-60"
+                >
+                  {deleting ? 'Eliminando…' : 'Confirmar eliminación'}
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  className="api-secondary"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex flex-wrap justify-end gap-3 border-t border-line px-5 py-4 sm:px-7">
-          <button
-            type="button"
-            className="rounded-lg border border-line px-5 py-2.5 text-sm font-semibold hover:bg-ivory disabled:opacity-50"
-            disabled={saving}
-            onClick={() => dialogRef.current?.close()}
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-graphite hover:bg-[#D7B65F] disabled:cursor-wait disabled:opacity-60"
-            disabled={saving}
-          >
-            {saving ? 'Guardando…' : 'Guardar cliente'}
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4 sm:px-7">
+          <div>
+            {client && !confirmDelete && (
+              <button
+                type="button"
+                className="api-secondary text-caramel-dark"
+                disabled={saving}
+                onClick={() => {
+                  setConfirmDelete(true)
+                  setGeneralError('')
+                }}
+              >
+                Eliminar cliente
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="api-secondary disabled:opacity-50"
+              disabled={saving}
+              onClick={() => dialogRef.current?.close()}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="api-primary disabled:cursor-wait disabled:opacity-60"
+              disabled={saving}
+            >
+              {saving && !deleting ? 'Guardando…' : 'Guardar cliente'}
+            </button>
+          </div>
         </div>
       </form>
     </dialog>

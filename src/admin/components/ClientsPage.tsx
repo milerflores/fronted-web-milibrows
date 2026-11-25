@@ -58,57 +58,50 @@ export function ClientsPage({ actor, data, notice, onOpen, onEdit, onNew }: Clie
   )
 
   return (
-    <main id="clientes" className="mx-auto max-w-[1200px] px-5 py-7 sm:px-8 xl:px-10">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <main id="clientes" className="mx-auto max-w-6xl space-y-7 px-5 py-8 sm:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="font-display text-[28px] leading-tight sm:text-[32px]">Clientes</h2>
-          <p className="mt-1 text-sm text-stone">
+          <h1 className="font-display text-3xl">Clientes</h1>
+          <p className="mt-2 text-sm text-stone">
             Contacto e historial de atenciones en un solo lugar.
           </p>
         </div>
-        <button
-          type="button"
-          className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-graphite shadow-card hover:bg-[#D7B65F] focus-visible:outline-2 focus-visible:outline-gold"
-          onClick={onNew}
-        >
-          + Nuevo cliente
+        <button type="button" className="api-primary" onClick={onNew}>
+          Nuevo cliente
         </button>
       </div>
       {notice && (
         <p
           role="status"
-          className="mb-5 rounded-card border border-[#CFD5C6] bg-[#F0F3EA] px-4 py-3 text-sm font-semibold text-sage-dark"
+          className="rounded-card bg-[#E9EEE3] p-4 text-sm text-sage-dark"
         >
           {notice}
         </p>
       )}
-      <section
-        aria-label="Listado de clientes"
-        className="overflow-hidden rounded-card border border-line bg-white shadow-card"
-      >
-        <div className="border-b border-line px-4 py-4 sm:px-6">
-          <label className="form-label" htmlFor="clients-search">
-            Buscar por nombre o teléfono
+      <section aria-label="Listado de clientes" className="api-panel">
+        <div className="pb-5">
+          <label className="block text-sm font-semibold" htmlFor="clients-search">
+            Buscar por nombre, DNI o teléfono
+            <input
+              id="clients-search"
+              className="api-input mt-2"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Nombre, DNI o teléfono"
+            />
           </label>
-          <input
-            id="clients-search"
-            className="form-input mt-1 max-w-lg"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Nombre o teléfono"
-          />
         </div>
         {loading ? (
-          <p role="status" className="px-6 py-12 text-center text-sm text-stone">
+          <p role="status" className="py-10 text-center text-sm text-stone">
             Cargando clientes…
           </p>
         ) : error ? (
-          <div role="alert" className="px-6 py-12 text-center">
+          <div role="alert" className="py-10 text-center">
             <p className="text-sm text-caramel-dark">{error}</p>
             <button
               type="button"
-              className="mt-3 rounded-lg bg-gold px-4 py-2 text-sm font-semibold"
+              className="api-primary mt-4"
               onClick={() => {
                 setLoading(true)
                 setRetryCount((count) => count + 1)
@@ -118,11 +111,11 @@ export function ClientsPage({ actor, data, notice, onOpen, onEdit, onNew }: Clie
             </button>
           </div>
         ) : !clients.length ? (
-          <p role="status" className="px-6 py-12 text-center text-sm text-stone">
+          <p role="status" className="py-10 text-center text-sm text-stone">
             Todavía no hay clientes registrados.
           </p>
         ) : !visible.length ? (
-          <p role="status" className="px-6 py-12 text-center text-sm text-stone">
+          <p role="status" className="py-10 text-center text-sm text-stone">
             No hay clientes con esa búsqueda.
           </p>
         ) : (
@@ -130,30 +123,30 @@ export function ClientsPage({ actor, data, notice, onOpen, onEdit, onNew }: Clie
             {visible.map((client) => (
               <div
                 key={client.id}
-                className="flex flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6"
+                className="flex flex-wrap items-center justify-between gap-4 py-4"
               >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold">{client.name}</p>
                   <p className="mt-1 text-sm text-stone">
-                    {client.phone}
+                    {client.phone || 'Sin teléfono'}
                     {client.email && (
-                      <span className="block break-all sm:inline sm:before:content-['·'] sm:before:mx-2">
+                      <span className="block break-all sm:inline sm:before:mx-2 sm:before:content-['·']">
                         {client.email}
                       </span>
                     )}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 flex-wrap gap-2">
                   <button
                     type="button"
-                    className="rounded-lg border border-line px-3 py-2 text-sm font-semibold hover:bg-ivory focus-visible:outline-2 focus-visible:outline-gold"
+                    className="api-secondary"
                     onClick={() => onOpen(client)}
                   >
                     Ver ficha
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-line px-3 py-2 text-sm font-semibold hover:bg-ivory focus-visible:outline-2 focus-visible:outline-gold"
+                    className="api-secondary"
                     onClick={() => onEdit(client)}
                   >
                     Editar
@@ -165,7 +158,7 @@ export function ClientsPage({ actor, data, notice, onOpen, onEdit, onNew }: Clie
         )}
       </section>
       {!loading && !error && visible.length > 0 && (
-        <p className="mt-3 flex items-center gap-2 text-xs text-stone">
+        <p className="flex items-center gap-2 text-xs text-stone">
           <Icon name="user" className="size-4" />
           {visible.length} {visible.length === 1 ? 'cliente visible' : 'clientes visibles'}
         </p>

@@ -123,7 +123,7 @@ export function MyProfilePage() {
     .reverse()
 
   return (
-    <main id="contenido" className="client-container py-12 sm:py-18">
+    <main id="contenido" className="client-container py-12 sm:py-16">
       <h1 className="mb-8 font-display text-4xl sm:text-5xl">Mi perfil y beneficios</h1>
       <Feedback
         loading={profile.loading}
@@ -133,7 +133,7 @@ export function MyProfilePage() {
       />
       {client && (
         <section className="api-panel">
-          <div className="flex flex-wrap justify-between gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-5">
             <h2 className="font-display text-2xl">{client.name}</h2>
             <button className="api-secondary" onClick={() => setEditing(true)}>
               Editar mis datos
@@ -186,11 +186,21 @@ export function MyProfilePage() {
                     <strong>{loyalty.data.siguiente_nivel.nombre}</strong> (
                     {loyalty.data.siguiente_nivel.porcentaje_descuento}% de descuento).
                   </p>
-                  <progress
-                    className="mt-3 h-3 w-full accent-[#C9A24B]"
-                    max={loyalty.data.siguiente_nivel.puntos_minimos}
-                    value={Math.max(0, loyalty.data.puntos)}
-                  />
+                  <div
+                    role="progressbar"
+                    aria-label="Progreso hacia el siguiente nivel"
+                    aria-valuemin={0}
+                    aria-valuemax={loyalty.data.siguiente_nivel.puntos_minimos}
+                    aria-valuenow={Math.max(0, loyalty.data.puntos)}
+                    className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/80"
+                  >
+                    <div
+                      className="h-full rounded-full bg-gold transition-all"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, (loyalty.data.puntos / Math.max(1, loyalty.data.siguiente_nivel.puntos_minimos)) * 100))}%`,
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -256,18 +266,23 @@ export function MyProfilePage() {
             Aquí aparecerán los servicios recibidos cuando completes tu primera atención.
           </p>
         )}
-        <div className="mt-6 grid gap-5 md:grid-cols-2">
+        <div className="mt-6 grid auto-rows-fr gap-5 md:grid-cols-2">
           {visits.map((item) => (
-            <article key={item.id} className="api-panel">
+            <article key={item.id} className="api-panel flex h-full flex-col">
               <h3 className="font-display text-xl">
                 {item.date} · {item.stylistName}
               </h3>
               <ServiceResults
                 services={item.services.filter((service) => service.result === 'realizado')}
               />
-              <a href={`#mis-citas/${item.id}`} className="text-sm font-semibold underline">
-                Ver cita completa
-              </a>
+              <div className="mt-auto pt-4">
+                <a
+                  href={`#mis-citas/${item.id}`}
+                  className="text-sm font-semibold text-caramel-dark underline underline-offset-4 hover:text-graphite"
+                >
+                  Ver cita completa
+                </a>
+              </div>
             </article>
           ))}
         </div>

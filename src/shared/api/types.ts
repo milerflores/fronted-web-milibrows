@@ -32,6 +32,14 @@ export interface ServiceDto {
   visible_al_publico: boolean
 }
 
+export interface PublicStylistDto {
+  id: number
+  nombre_completo: string
+  cargo: string
+  imagen_url: string | null
+  ids_servicios: number[]
+}
+
 export interface ManualDiscountDto {
   monto: string
   id_motivo_descuento: number | null
@@ -109,6 +117,7 @@ export interface EmployeeDto {
   cargo: string
   activo: boolean
   admite_reservas: boolean
+  imagen_url?: string | null
   cuenta: ProfileDto
   jornada: ScheduleDto[]
   servicios: (ServiceDto & { pivot?: { activo: boolean } })[]

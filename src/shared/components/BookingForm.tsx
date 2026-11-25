@@ -178,7 +178,7 @@ export function BookingForm({
           {services.map((service) => (
             <label
               key={service.id}
-              className={`flex cursor-pointer items-start gap-3 rounded-card border p-4 text-sm ${serviceIds.includes(service.id) ? 'border-gold bg-champagne/30' : 'border-line bg-white'}`}
+              className={`flex h-full cursor-pointer items-start gap-3 rounded-card border p-4 text-sm transition ${serviceIds.includes(service.id) ? 'border-gold bg-champagne/30' : 'border-line bg-white hover:border-gold/60'}`}
             >
               <input
                 type="checkbox"
@@ -221,7 +221,7 @@ export function BookingForm({
             }}
           />
           {!multiMode && (
-            <label className="text-sm font-semibold">
+            <label className="block text-sm font-semibold">
               Estilista
               <select
                 className="api-input mt-2"
@@ -253,9 +253,10 @@ export function BookingForm({
           )}
         </div>
         {selected.length > 1 && (
-          <label className="flex items-center gap-3 text-sm">
+          <label className="flex cursor-pointer items-center gap-3 text-sm">
             <input
               type="checkbox"
+              className="accent-[#C9A24B]"
               checked={perService}
               disabled={saving}
               onChange={(event) => setPerService(event.target.checked)}
@@ -292,7 +293,7 @@ export function BookingForm({
                     {svc.name} · {svc.duration} min
                   </p>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="text-sm font-semibold">
+                    <label className="block text-sm font-semibold">
                       Estilista
                       <select
                         className="api-input mt-2"
@@ -322,7 +323,7 @@ export function BookingForm({
                               ))}
                       </select>
                     </label>
-                    <label className="text-sm font-semibold">
+                    <label className="block text-sm font-semibold">
                       Hora de inicio
                       {internal ? (
                         <input
@@ -402,11 +403,11 @@ export function BookingForm({
         )}
       </section>
       <div className="rounded-[18px] bg-sand p-6">
-        <div className="flex flex-wrap justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <span className="text-sm">
-            {selected.length} servicios · {duration} min
+            {selected.length} {selected.length === 1 ? 'servicio' : 'servicios'} · {duration} min
           </span>
-          <strong>S/ {total.toFixed(2)}</strong>
+          <strong className="whitespace-nowrap">S/ {total.toFixed(2)}</strong>
         </div>
         {!multiMode && selectedEmployee && startTime && (
           <p className="mt-3 text-sm text-stone">

@@ -58,7 +58,7 @@ export function ClientAccessPage({
     }
   }
   return (
-    <main id="contenido" className="client-container py-12 sm:py-18">
+    <main id="contenido" className="client-container py-12 sm:py-16">
       <section className="api-panel mx-auto max-w-xl">
         <h1 className="mb-8 text-center font-display text-3xl sm:text-4xl">
           {mode === 'login' ? 'Nos alegra que estés de vuelta' : 'Crea tu cuenta'}

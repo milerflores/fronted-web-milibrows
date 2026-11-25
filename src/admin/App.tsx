@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../shared/api/useApi'
 import type { AppointmentDto } from '../shared/api/types'
 import { mapAppointment } from '../shared/agenda/agendaService'
@@ -64,6 +64,113 @@ function SecurityPage({ session }: { session: Session }) {
         </section>
       )}
     </main>
+  )
+}
+
+const roleLabels: Record<Session['role'], string> = {
+  administrador: 'Administración',
+  recepcionista: 'Recepción',
+  estilista: 'Estilista',
+  cliente: 'Cliente',
+}
+
+function UserMenu({
+  session,
+  activeView,
+  loggingOut,
+  onLogout,
+}: {
+  session: Session
+  activeView: string
+  loggingOut: boolean
+  onLogout: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const firstName = session.name.trim().split(/\s+/)[0] || session.name
+  const initial = firstName.charAt(0).toUpperCase()
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative shrink-0">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex min-h-[38px] cursor-pointer items-center gap-2.5 rounded-full border border-line bg-white/90 py-1 pl-1.5 pr-3 text-sm font-semibold text-graphite transition hover:border-gold/70 hover:bg-white focus-visible:outline-2 focus-visible:outline-gold"
+      >
+        <span
+          aria-hidden="true"
+          className="grid size-7 shrink-0 place-items-center rounded-full bg-champagne text-xs font-bold text-graphite"
+        >
+          {initial}
+        </span>
+        <span className="whitespace-nowrap">{firstName}</span>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+          className={`size-3.5 text-stone transition-transform ${open ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M4 6l4 4 4-4" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-30 mt-2 w-64 rounded-2xl border border-line bg-white p-2 shadow-[0_16px_40px_rgb(26_26_26/12%)]"
+        >
+          <div className="border-b border-line px-3 py-2.5">
+            <p className="truncate text-sm font-semibold text-graphite">{session.name}</p>
+            <p className="mt-0.5 truncate text-xs text-stone">{roleLabels[session.role]}</p>
+            <p className="mt-0.5 truncate text-xs text-stone">{session.accessEmail}</p>
+          </div>
+          <div className="space-y-1.5 pt-1.5">
+            <a
+              href="#seguridad"
+              role="menuitem"
+              aria-current={activeView === 'seguridad' ? 'page' : undefined}
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-graphite no-underline transition hover:bg-sand focus-visible:outline-2 focus-visible:outline-gold"
+            >
+              <span>Seguridad</span>
+            </a>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={loggingOut}
+              onClick={() => {
+                setOpen(false)
+                onLogout()
+              }}
+              className="flex w-full cursor-pointer items-center justify-between rounded-xl bg-champagne px-3 py-2 text-left text-sm font-semibold text-black transition hover:bg-[#EAD58E] focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-wait disabled:opacity-55"
+            >
+              <span>{loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -151,9 +258,8 @@ function Workspace({
     { id: 'personal', label: 'Personal', allowed: session.role === 'administrador' },
     { id: 'fidelizacion', label: 'Fidelización', allowed: session.role === 'administrador' },
     { id: 'configuracion', label: 'Estudio', allowed: session.role === 'administrador' },
-    { id: 'seguridad', label: 'Seguridad', allowed: true },
   ].filter((item) => item.allowed)
-  const view = tabs.some((item) => item.id === route) ? route : 'agenda'
+  const view = route === 'seguridad' || tabs.some((item) => item.id === route) ? route : 'agenda'
 
   function updated(result: CreatedAppointment, message = 'Cita guardada correctamente.') {
     setAction(null)
@@ -170,35 +276,40 @@ function Workspace({
   }
 
   return (
-    <div className="min-h-screen bg-ivory font-sans text-graphite">
-      <header className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-5 px-5 py-5 sm:px-8">
-          <a href="#agenda">
-            <img src={logo} alt="MiliBrows Studio" className="w-[155px]" />
+    <div className="flex h-dvh flex-col overflow-hidden bg-ivory font-sans text-graphite">
+      <header className="relative z-20 shrink-0 border-b border-line bg-sand shadow-[0_2px_12px_rgb(26_26_26/4%)]">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-x-5 gap-y-3 px-5 py-3.5 sm:px-8 lg:flex-nowrap">
+          <a href="#agenda" className="inline-flex shrink-0 items-center">
+            <img src={logo} alt="MiliBrows Studio" className="w-[135px] sm:w-[145px]" />
           </a>
-          <div className="flex flex-wrap items-center gap-5">
-            <span className="text-sm font-semibold">{session.name}</span>
-            <button className="api-secondary" disabled={loggingOut} onClick={onLogout}>
-              {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
-            </button>
-          </div>
+          <nav
+            aria-label="Panel interno"
+            className="order-3 flex w-full min-w-0 items-center gap-1.5 overflow-x-auto py-1 lg:order-none lg:w-auto lg:flex-1 lg:justify-center"
+          >
+            {tabs.map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                aria-current={view === item.id ? 'page' : undefined}
+                className={`inline-flex min-h-[38px] shrink-0 items-center justify-center rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap no-underline transition focus-visible:outline-2 focus-visible:outline-gold ${
+                  view === item.id
+                    ? 'bg-champagne text-black'
+                    : 'text-graphite/80 hover:bg-white/75 hover:text-black'
+                }`}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+          <UserMenu
+            session={session}
+            activeView={view}
+            loggingOut={loggingOut}
+            onLogout={onLogout}
+          />
         </div>
-        <nav
-          aria-label="Panel interno"
-          className="mx-auto flex max-w-[1600px] gap-2 overflow-x-auto px-5 pb-5 sm:px-8"
-        >
-          {tabs.map((item) => (
-            <a
-              key={item.id}
-              href={`#${item.id}`}
-              aria-current={view === item.id ? 'page' : undefined}
-              className={`whitespace-nowrap ${view === item.id ? 'api-primary' : 'api-secondary'}`}
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
       </header>
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {view === 'agenda' && (
         <main className="mx-auto max-w-7xl space-y-7 px-5 py-8 sm:px-8">
           <div className="flex flex-wrap items-center justify-between gap-5">
@@ -247,7 +358,7 @@ function Workspace({
               value={until}
               onChange={(event) => setUntil(event.target.value)}
             />
-            <label className="text-sm font-semibold">
+            <label className="block text-sm font-semibold">
               Estado
               <select
                 className="api-input mt-2"
@@ -261,7 +372,7 @@ function Workspace({
                 <option value="no_asistio">No asistió</option>
               </select>
             </label>
-            <label className="text-sm font-semibold">
+            <label className="block text-sm font-semibold">
               Estilista
               <select
                 className="api-input mt-2"
@@ -316,27 +427,27 @@ function Workspace({
                       month: 'long',
                     }).format(dateFromKey(day))}
                   </h2>
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {items
                       .filter((item) => item.date === day)
                       .map((item) => (
                         <button
                           key={item.id}
-                          className="api-panel text-left transition hover:border-gold focus-visible:outline-2 focus-visible:outline-gold"
+                          className="api-panel flex h-full w-full flex-col items-stretch text-left transition hover:border-gold focus-visible:outline-2 focus-visible:outline-gold"
                           onClick={() => {
                             setSelected(item)
                             setNotice('')
                           }}
                         >
-                          <div className="flex flex-wrap justify-between gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
                             <strong>{item.startTime}</strong>
                             <StatusBadge status={item.status} />
                           </div>
                           <h3 className="mt-4 font-semibold">
                             {item.client?.name ?? `Cliente ${item.clientId}`}
                           </h3>
-                          <p className="mt-2 text-sm text-stone">{item.stylistName}</p>
-                          <p className="mt-4 text-sm">
+                          <p className="mt-1 text-sm text-stone">{item.stylistName}</p>
+                          <p className="mt-auto pt-4 text-sm leading-relaxed">
                             {item.services.map((service) => service.serviceName).join(' · ')}
                           </p>
                         </button>
@@ -370,6 +481,7 @@ function Workspace({
       {view === 'fidelizacion' && <LoyaltyPage />}
       {view === 'configuracion' && <SettingsPage />}
       {view === 'seguridad' && <SecurityPage session={session} />}
+      </div>
       {selected && (
         <AppointmentDialog
           appointment={selected}
@@ -429,6 +541,11 @@ function Workspace({
             setEditingClient(null)
             query.reload()
             setNotice('Ficha de cliente guardada correctamente.')
+          }}
+          onDeleted={() => {
+            setEditingClient(null)
+            query.reload()
+            setNotice('Ficha de cliente eliminada correctamente.')
           }}
         />
       )}
@@ -495,7 +612,8 @@ function App() {
     )
   if (session?.mfaRequired)
     return (
-      <main className="grid min-h-screen place-items-center bg-ivory px-5 py-10 font-sans">
+      <main className="flex min-h-screen flex-col items-center justify-center bg-ivory px-5 py-12 font-sans text-graphite">
+        <img src={logo} alt="MiliBrows Studio" className="mb-8 w-[180px]" />
         <MfaPanel session={session} />
       </main>
     )
@@ -515,8 +633,8 @@ function App() {
       </>
     )
   return (
-    <main className="admin-access-page grid min-h-screen place-items-center bg-white px-5 py-12 font-sans text-graphite">
-      <section className="w-full max-w-[480px]">
+    <main className="admin-access-page grid min-h-screen place-items-center bg-ivory px-5 py-12 font-sans text-graphite">
+      <section className="api-panel w-full max-w-[480px]">
         <img src={logo} alt="MiliBrows Studio" className="mx-auto w-[180px]" />
         <h1 className="mt-8 text-center font-display text-3xl sm:text-4xl">
           {session ? 'Tu cuenta es de cliente' : 'Ingresa a tu cuenta'}
@@ -528,7 +646,7 @@ function App() {
           }}
         />
         {session ? (
-          <div className="mt-8 flex flex-wrap gap-4">
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
             <a className="api-primary" href={appUrl('client', '#mi-perfil')}>
               Ir a mi portal
             </a>

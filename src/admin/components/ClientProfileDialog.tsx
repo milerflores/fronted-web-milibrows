@@ -116,7 +116,7 @@ export function ClientProfileDialog({
             <p className="text-sm text-caramel-dark">{error}</p>
             <button
               type="button"
-              className="mt-3 rounded-lg bg-gold px-4 py-2 text-sm font-semibold"
+              className="api-primary mt-3"
               onClick={() => {
                 setLoading(true)
                 setRetryCount((count) => count + 1)
@@ -171,14 +171,14 @@ export function ClientProfileDialog({
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold hover:bg-[#D7B65F]"
+                    className="api-primary"
                     onClick={() => onBook(client)}
                   >
                     + Nueva cita
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold hover:bg-ivory"
+                    className="api-secondary"
                     onClick={() => onEdit(client)}
                   >
                     Editar datos

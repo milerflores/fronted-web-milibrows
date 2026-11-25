@@ -61,12 +61,15 @@ export function Modal({
   busy?: boolean
 }) {
   const ref = useRef<HTMLDialogElement>(null)
+  const mounted = useRef(false)
   const titleId = useId()
   useEffect(() => {
+    mounted.current = true
     const dialog = ref.current
-    dialog?.showModal()
+    if (dialog && !dialog.open) dialog.showModal()
     return () => {
-      dialog?.close()
+      mounted.current = false
+      if (dialog?.open) dialog.close()
     }
   }, [])
   return (
@@ -74,18 +77,23 @@ export function Modal({
       ref={ref}
       aria-labelledby={titleId}
       className="api-modal"
-      onClose={onClose}
+      onClose={() => {
+        if (mounted.current && !ref.current?.open) onClose()
+      }}
+      onClick={(event) => {
+        if (event.target === ref.current && !busy) onClose()
+      }}
       onCancel={(event) => {
         if (busy) event.preventDefault()
       }}
     >
-      <div className="flex items-center justify-between gap-4 border-b border-line p-6 sm:px-8">
+      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line p-6 sm:px-8">
         <h2 id={titleId} className="font-display text-2xl sm:text-3xl">
           {title}
         </h2>
         <button
           type="button"
-          className="api-secondary"
+          className="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-white text-xl leading-none text-graphite transition hover:bg-sand focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-50"
           aria-label="Cerrar"
           disabled={busy}
           onClick={onClose}
@@ -93,7 +101,7 @@ export function Modal({
           ×
         </button>
       </div>
-      <div className="p-6 sm:p-8">{children}</div>
+      <div className="api-modal__body p-6 sm:p-8">{children}</div>
     </dialog>
   )
 }
@@ -121,8 +129,8 @@ export function ServiceResults({
   return (
     <ul className="divide-y divide-line">
       {services.map((service) => (
-        <li key={service.id} className="flex flex-wrap justify-between gap-3 py-4 text-sm">
-          <div>
+        <li key={service.id} className="flex flex-wrap items-start justify-between gap-3 py-4 text-sm">
+          <div className="min-w-0 flex-1">
             <p className="font-semibold">{service.serviceName}</p>
             <p className="mt-1 text-stone">
               {service.startTime ? `${service.startTime} · ` : ''}
@@ -131,7 +139,7 @@ export function ServiceResults({
             </p>
             {service.resultReason && <p className="mt-1 text-stone">{service.resultReason}</p>}
           </div>
-          <strong>
+          <strong className="shrink-0 whitespace-nowrap">
             {new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(
               service.agreedPrice,
             )}

@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { request, resource } from '../../shared/api/http'
+import { apiAssetUrl, request, resource } from '../../shared/api/http'
 import { useApi } from '../../shared/api/useApi'
 import type { AppointmentDto, EmployeeDto, ServiceDto } from '../../shared/api/types'
 import { mapAppointment } from '../../shared/agenda/agendaService'
@@ -111,7 +111,7 @@ function EmployeeCreator({ onClose, onSaved }: { onClose: () => void; onSaved: (
           Usa mayúsculas, minúsculas y números. Comunica las credenciales iniciales a la persona.
         </p>
         <div className="grid gap-5 sm:grid-cols-2">
-          <label className="text-sm font-semibold">
+          <label className="block text-sm font-semibold">
             Rol
             <select
               className="api-input mt-2"
@@ -132,7 +132,7 @@ function EmployeeCreator({ onClose, onSaved }: { onClose: () => void; onSaved: (
           />
         </div>
         {value.rol === 'estilista' && (
-          <label className="flex gap-3 text-sm">
+          <label className="flex items-center gap-3 text-sm">
             <input
               type="checkbox"
               checked={value.admite_reservas}
@@ -158,11 +158,13 @@ function EmployeeEditor({
   services,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   initial: EmployeeDto
   services: ServiceDto[]
   onClose: () => void
   onSaved: () => void
+  onDeleted: () => void
 }) {
   const [tab, setTab] = useState('perfil')
   const [schedule, setSchedule] = useState(initial.jornada)
@@ -186,6 +188,13 @@ function EmployeeEditor({
   const [serviceIds, setServiceIds] = useState(
     initial.servicios.filter((item) => item.pivot?.activo ?? true).map((item) => item.id),
   )
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(initial.imagen_url ?? null)
+  const [image, setImage] = useState<File | null>(null)
+  const [removeImage, setRemoveImage] = useState(false)
+  const [preview, setPreview] = useState('')
+  const imageInput = useRef<HTMLInputElement>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -194,6 +203,12 @@ function EmployeeEditor({
     tab === 'atenciones' ? `/empleados/${initial.id}/atenciones` : null,
     true,
   )
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview)
+    }
+  }, [preview])
 
   async function save(event: FormEvent) {
     event.preventDefault()
@@ -208,15 +223,26 @@ function EmployeeEditor({
     setNotice('')
     try {
       const path = `/empleados/${initial.id}`
-      if (tab === 'perfil')
-        await resource(path, 'PATCH', {
-          ...profile,
-          nombre: profile.nombre.trim(),
-          apellido_paterno: profile.apellido_paterno.trim(),
-          apellido_materno: profile.apellido_materno.trim() || null,
-          telefono: profile.telefono || null,
-          correo_contacto: profile.correo_contacto || null,
-        })
+      if (tab === 'perfil') {
+        const data = new FormData()
+        data.set('_method', 'PATCH')
+        data.set('nombre', profile.nombre.trim())
+        data.set('apellido_paterno', profile.apellido_paterno.trim())
+        data.set('apellido_materno', profile.apellido_materno.trim())
+        data.set('telefono', profile.telefono.trim())
+        data.set('correo_contacto', profile.correo_contacto.trim())
+        data.set('cargo', profile.cargo.trim())
+        data.set('activo', profile.activo ? '1' : '0')
+        data.set('admite_reservas', profile.admite_reservas ? '1' : '0')
+        if (image) data.set('imagen', image)
+        if (removeImage) data.set('eliminar_imagen', '1')
+        const updated = await resource<EmployeeDto>(path, 'POST', data)
+        setCurrentImageUrl(updated.imagen_url ?? null)
+        setImage(null)
+        setPreview('')
+        setRemoveImage(false)
+        if (imageInput.current) imageInput.current.value = ''
+      }
       if (tab === 'cuenta') {
         await resource(`${path}/cuenta`, 'PATCH', account)
         if (account.rol !== 'estilista')
@@ -236,6 +262,26 @@ function EmployeeEditor({
     } finally {
       saving.current = false
       setBusy(false)
+    }
+  }
+
+  async function deleteEmployee() {
+    if (saving.current) return
+    saving.current = true
+    setBusy(true)
+    setDeleting(true)
+    setError('')
+    setNotice('')
+    try {
+      await request(`/empleados/${initial.id}`, 'DELETE')
+      onDeleted()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo eliminar el registro.')
+      setConfirmDelete(false)
+    } finally {
+      saving.current = false
+      setBusy(false)
+      setDeleting(false)
     }
   }
 
@@ -349,7 +395,65 @@ function EmployeeEditor({
                     setProfile({ ...profile, correo_contacto: event.target.value })
                   }
                 />
-                <label className="flex gap-3 text-sm">
+                <section className="space-y-4 rounded-card border border-line p-4">
+                  <label className="block text-sm font-semibold">
+                    Fotografía (se muestra en Nuestro equipo si es estilista)
+                    <input
+                      ref={imageInput}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={busy}
+                      className="api-input mt-2"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null
+                        if (
+                          file &&
+                          (file.size > 2 * 1024 * 1024 ||
+                            !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
+                        ) {
+                          setError('Selecciona una imagen JPG, PNG o WebP de hasta 2 MB.')
+                          setImage(null)
+                          setPreview('')
+                          setRemoveImage(false)
+                          event.target.value = ''
+                          return
+                        }
+                        setImage(file)
+                        setPreview(file ? URL.createObjectURL(file) : '')
+                        setRemoveImage(false)
+                        setError('')
+                      }}
+                    />
+                  </label>
+                  <p className="text-sm text-stone">JPG, PNG o WebP. Máximo 2 MB.</p>
+                  {(image
+                    ? preview
+                    : !removeImage && currentImageUrl
+                      ? apiAssetUrl(currentImageUrl)
+                      : '') && (
+                    <img
+                      src={image ? preview : apiAssetUrl(currentImageUrl!)}
+                      alt="Vista previa de la fotografía"
+                      className="aspect-[3/2] w-full max-w-sm rounded-card object-cover object-top"
+                    />
+                  )}
+                  {(image || currentImageUrl) && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="api-secondary"
+                      onClick={() => {
+                        setImage(null)
+                        setPreview('')
+                        setRemoveImage(!removeImage)
+                        if (imageInput.current) imageInput.current.value = ''
+                      }}
+                    >
+                      {removeImage ? 'Conservar imagen actual' : 'Quitar imagen'}
+                    </button>
+                  )}
+                </section>
+                <label className="flex items-center gap-3 text-sm">
                   <input
                     type="checkbox"
                     checked={profile.activo}
@@ -358,7 +462,7 @@ function EmployeeEditor({
                   Perfil activo
                 </label>
                 {account.rol === 'estilista' && (
-                  <label className="flex gap-3 text-sm">
+                  <label className="flex items-center gap-3 text-sm">
                     <input
                       type="checkbox"
                       checked={profile.admite_reservas}
@@ -395,7 +499,7 @@ function EmployeeEditor({
                     <option value="estilista">Estilista</option>
                   </select>
                 </label>
-                <label className="flex gap-3 text-sm">
+                <label className="flex items-center gap-3 text-sm">
                   <input
                     type="checkbox"
                     checked={account.activo}
@@ -435,7 +539,7 @@ function EmployeeEditor({
             {tab === 'servicios' && (
               <div className="space-y-4">
                 {services.map((item) => (
-                  <label key={item.id} className="flex gap-3 text-sm">
+                  <label key={item.id} className="flex items-center gap-3 text-sm">
                     <input
                       type="checkbox"
                       checked={serviceIds.includes(item.id)}
@@ -455,9 +559,50 @@ function EmployeeEditor({
             )}
           </fieldset>
           <Feedback error={error} notice={notice} />
-          <button disabled={busy} className="api-primary">
-            {busy ? 'Guardando…' : 'Guardar cambios'}
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <button disabled={busy} className="api-primary">
+              {busy && !deleting ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+            {tab === 'perfil' && !confirmDelete && (
+              <button
+                type="button"
+                disabled={busy}
+                className="api-secondary text-caramel-dark"
+                onClick={() => {
+                  setConfirmDelete(true)
+                  setError('')
+                }}
+              >
+                Eliminar personal
+              </button>
+            )}
+          </div>
+          {tab === 'perfil' && confirmDelete && (
+            <div className="rounded-card border border-[#E8CFC0] bg-[#FAF0EA] p-4 text-sm">
+              <p className="font-semibold text-caramel-dark">
+                ¿Eliminar a «{initial.cuenta.persona?.nombre_completo ?? initial.cargo}»? Esta
+                acción no se puede deshacer.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void deleteEmployee()}
+                  className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-full bg-caramel-dark px-5 py-2 text-sm font-semibold text-white transition hover:bg-caramel disabled:cursor-wait disabled:opacity-60"
+                >
+                  {deleting ? 'Eliminando…' : 'Confirmar eliminación'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="api-secondary"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </form>
       )}
     </Modal>
@@ -510,18 +655,32 @@ export function PersonnelAccountsSection() {
               key={item.id}
               className="flex flex-wrap items-center justify-between gap-4 py-5"
             >
-              <div>
-                <h2 className="font-semibold">{item.cuenta.persona?.nombre_completo}</h2>
-                <p className="mt-2 text-sm text-stone">
-                  {item.cargo} · {item.cuenta.correo}
-                </p>
-                <p className="mt-1 text-xs text-stone">
-                  {item.activo && item.cuenta.activo ? 'Acceso activo' : 'Acceso inactivo'} ·{' '}
-                  {item.admite_reservas ? 'Admite reservas' : 'Sin reservas asignables'}
-                </p>
+              <div className="flex min-w-0 flex-1 items-center gap-4">
+                <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-sand text-sm font-semibold text-stone">
+                  {item.imagen_url ? (
+                    <img
+                      src={apiAssetUrl(item.imagen_url)}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover object-top"
+                    />
+                  ) : (
+                    (item.cuenta.persona?.nombre_completo ?? item.cargo).charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-semibold">{item.cuenta.persona?.nombre_completo}</h2>
+                  <p className="mt-1 text-sm text-stone">
+                    {item.cargo} · {item.cuenta.correo}
+                  </p>
+                  <p className="mt-1 text-xs text-stone">
+                    {item.activo && item.cuenta.activo ? 'Acceso activo' : 'Acceso inactivo'} ·{' '}
+                    {item.admite_reservas ? 'Admite reservas' : 'Sin reservas asignables'}
+                  </p>
+                </div>
               </div>
               <button
-                className="api-secondary"
+                className="api-secondary shrink-0"
                 disabled={!services.data}
                 onClick={() => setEditing(item)}
               >
@@ -550,6 +709,11 @@ export function PersonnelAccountsSection() {
           services={services.data ?? []}
           onClose={() => setEditing(null)}
           onSaved={employees.reload}
+          onDeleted={() => {
+            setEditing(null)
+            employees.reload()
+            setNotice('Registro de personal eliminado correctamente.')
+          }}
         />
       )}
     </main>

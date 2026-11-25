@@ -4,7 +4,14 @@ import type { AppointmentDto } from '../../shared/api/types'
 import { cancelAppointment, mapAppointment } from '../../shared/agenda/agendaService'
 import { Feedback, Modal, ServiceResults } from '../../shared/components/Forms'
 import { RescheduleDialog } from '../../shared/components/RescheduleDialog'
-import type { Appointment } from '../../shared/agenda/types'
+import type { Appointment, AppointmentStatus } from '../../shared/agenda/types'
+
+const statusStyles: Record<AppointmentStatus, string> = {
+  confirmada: 'bg-[#F8EFD3] text-[#705917]',
+  completada: 'bg-[#E7EBDD] text-sage-dark',
+  cancelada: 'bg-[#F5E8E2] text-caramel-dark',
+  'no asistió': 'bg-sand text-stone',
+}
 
 export function MyAppointmentsPage({ initialAppointmentId }: { initialAppointmentId?: string }) {
   const query = useApi<AppointmentDto[]>('/citas', true)
@@ -50,14 +57,14 @@ export function MyAppointmentsPage({ initialAppointmentId }: { initialAppointmen
   }
 
   return (
-    <main id="contenido" className="client-container py-12 sm:py-18">
+    <main id="contenido" className="client-container py-12 sm:py-16">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-5">
         <h1 className="font-display text-4xl sm:text-5xl">Mis citas</h1>
         <a href="#reservar" className="api-primary">
           Nueva reserva
         </a>
       </div>
-      <div className="mb-6 flex gap-3">
+      <div className="mb-6 flex flex-wrap gap-3">
         <button
           className={showAll ? 'api-secondary' : 'api-primary'}
           onClick={() => setShowAll(false)}
@@ -77,27 +84,36 @@ export function MyAppointmentsPage({ initialAppointmentId }: { initialAppointmen
         onRetry={query.reload}
         notice={notice}
       />
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid auto-rows-fr gap-5 md:grid-cols-2">
         {visible.map((item) => (
-          <article className="api-panel" key={item.id}>
-            <p className="text-sm font-semibold text-caramel-dark">{item.status}</p>
+          <article className="api-panel flex h-full flex-col" key={item.id}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span
+                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap ${statusStyles[item.status]}`}
+              >
+                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              </span>
+              <span className="text-xs text-stone">Cita #{item.id}</span>
+            </div>
             <h2 className="mt-3 font-display text-2xl">
               {item.date} · {item.startTime}
             </h2>
             <p className="mt-2 text-sm text-stone">{item.stylistName}</p>
-            <p className="mt-4 text-sm">
+            <p className="mt-4 text-sm leading-relaxed">
               {item.services.map((service) => service.serviceName).join(' · ')}
             </p>
-            <button
-              className="api-secondary mt-5"
-              onClick={() => {
-                setSelected(item)
-                setMode('detail')
-                setError('')
-              }}
-            >
-              Ver detalle
-            </button>
+            <div className="mt-auto pt-5">
+              <button
+                className="api-secondary"
+                onClick={() => {
+                  setSelected(item)
+                  setMode('detail')
+                  setError('')
+                }}
+              >
+                Ver detalle
+              </button>
+            </div>
           </article>
         ))}
       </div>

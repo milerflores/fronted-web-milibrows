@@ -1,6 +1,7 @@
-import type { PublicService } from '../../shared/agenda/types'
+import { useEffect, useState } from 'react'
+import type { PublicService, PublicStylist } from '../../shared/agenda/types'
 
-import { ServiceCard } from '../components/CatalogCards'
+import { ServiceCard, StudioTeam } from '../components/CatalogCards'
 import { CatalogState } from '../components/CatalogState'
 import hero from '../../assets/images/home/hero.jpg'
 import instalacion from '../../assets/images/home/instalacion.jpg'
@@ -8,18 +9,35 @@ import invitacion from '../../assets/images/home/invitacion.jpg'
 
 export function HomePage({
   services,
+  stylists,
   loading,
   error,
+  teamLoading,
+  teamError,
   onRetry,
+  onRetryTeam,
   onBookService,
 }: {
   services: PublicService[] | null
+  stylists: PublicStylist[] | null
   loading: boolean
   error: string
+  teamLoading: boolean
+  teamError: string
   onRetry: () => void
+  onRetryTeam: () => void
   onBookService: (id: string) => void
 }) {
   const availableServices = services ?? []
+  const availableStylists = stylists ?? []
+  const [showTop, setShowTop] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 420)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
     <main id="contenido" className="client-home-page">
@@ -64,25 +82,25 @@ export function HomePage({
         aria-labelledby="services-title"
       >
         <div className="client-container">
-          <div className="mb-12 flex flex-wrap items-end justify-between gap-8 pb-9">
+          <div className="mb-12 flex flex-wrap items-end justify-between gap-8">
             <div className="max-w-[720px]">
-              <h2 id="services-title" className="client-section-heading mt-6">
+              <h2 id="services-title" className="client-section-heading">
                 Nuestros servicios
               </h2>
-              <p className="mt-5 max-w-[58ch] text-lg leading-relaxed text-white/80">
+              <p className="mt-4 max-w-[58ch] text-base leading-relaxed text-white/80 sm:text-lg">
                 Explora todos los servicios disponibles, sus tiempos y precios. Elige el cuidado que
                 mejor va contigo.
               </p>
             </div>
-            <a href="#reservar" className="client-secondary shrink-0">
-              Reservar cita <span aria-hidden="true"></span>
+            <a href="#reservar" className="client-secondary shrink-0 gap-2">
+              Reservar cita <span aria-hidden="true">→</span>
             </a>
           </div>
           <CatalogState loading={loading} error={error} onRetry={onRetry} />
           {!loading &&
             !error &&
             (availableServices.length ? (
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {availableServices.map((service, index) => (
                   <ServiceCard
                     key={service.id}
@@ -114,19 +132,19 @@ export function HomePage({
           <div className="max-w-[680px]">
             <h2
               id="studio-title"
-              className="mt-5 max-w-[13ch] font-display text-[clamp(2.8rem,5.5vw,5.6rem)] leading-[1.05] tracking-[-.04em]"
+              className="max-w-[13ch] font-display text-[clamp(2.8rem,5.5vw,5.6rem)] leading-[1.05] tracking-[-.04em]"
             >
               Un espacio para elegir con calma.
             </h2>
-            <p className="mt-7 max-w-[47ch] text-lg leading-relaxed text-white/90">
+            <p className="mt-6 max-w-[47ch] text-base leading-relaxed text-white/90 sm:text-lg">
               Un lugar preparado para disfrutar cada atención con calma. Conoce nuestros servicios y
               a las estilistas que te acompañarán.
             </p>
             <a
               href="#estilistas"
-              className="mt-9 inline-block pb-1 text-base font-semibold text-champagne transition hover:text-white"
+              className="mt-8 inline-flex items-center gap-2 border-b border-champagne/70 pb-1 text-base font-semibold text-champagne transition hover:border-white hover:text-white"
             >
-              Conocer a las estilistas
+              Conocer a las estilistas <span aria-hidden="true">→</span>
             </a>
           </div>
         </div>
@@ -137,21 +155,31 @@ export function HomePage({
         aria-labelledby="team-title"
       >
         <div className="client-container">
-          <div className="mb-12 max-w-[720px]">
-            <h2 id="team-title" className="client-section-heading mt-4">
-              Nuestro equipo
-            </h2>
-            <p className="mt-5 text-lg text-white/85">
-              Nuestro equipo te acompaña en cada atención.
-            </p>
+          <div className="mb-12 flex flex-wrap items-end justify-between gap-8">
+            <div className="max-w-[720px]">
+              <h2 id="team-title" className="client-section-heading">
+                Nuestro equipo
+              </h2>
+              <p className="mt-4 max-w-[54ch] text-base leading-relaxed text-white/85 sm:text-lg">
+                Conoce a las estilistas que te acompañarán en cada atención y los servicios en los
+                que se especializan.
+              </p>
+            </div>
+            <a href="#reservar" className="client-primary shrink-0">
+              Elegir mi atención
+            </a>
           </div>
-          <p className="max-w-xl text-base leading-relaxed text-white/85">
-            Al reservar podr?s elegir entre las estilistas disponibles para tus servicios y la fecha
-            que prefieras.
-          </p>
-          <a href="#reservar" className="client-primary mt-8">
-            Elegir mi atenci?n
-          </a>
+          <CatalogState loading={teamLoading} error={teamError} onRetry={onRetryTeam} />
+          {!teamLoading &&
+            !teamError &&
+            (availableStylists.length ? (
+              <StudioTeam stylists={availableStylists} services={availableServices} />
+            ) : (
+              <p className="rounded-[18px] bg-white p-8 text-stone">
+                Al reservar podrás elegir entre las estilistas disponibles para tus servicios y la
+                fecha que prefieras.
+              </p>
+            ))}
         </div>
       </section>
       <section
@@ -185,6 +213,29 @@ export function HomePage({
           </div>
         </div>
       </section>
+      {showTop && (
+        <button
+          type="button"
+          aria-label="Volver arriba"
+          title="Volver arriba"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed right-5 bottom-5 z-30 grid size-12 cursor-pointer place-items-center rounded-full bg-champagne text-black shadow-[0_10px_28px_rgb(26_26_26/25%)] transition hover:-translate-y-0.5 hover:bg-[#EAD58E] focus-visible:outline-2 focus-visible:outline-gold sm:right-8 sm:bottom-8"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            className="size-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10 15V5" />
+            <path d="M5 10l5-5 5 5" />
+          </svg>
+        </button>
+      )}
     </main>
   )
 }

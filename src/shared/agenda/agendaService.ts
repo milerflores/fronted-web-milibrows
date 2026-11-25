@@ -1,5 +1,11 @@
 import { allPages, ApiError, apiAssetUrl, resource } from '../api/http'
-import type { AppointmentDto, ClientDto, ProfileDto, ServiceDto } from '../api/types'
+import type {
+  AppointmentDto,
+  ClientDto,
+  ProfileDto,
+  PublicStylistDto,
+  ServiceDto,
+} from '../api/types'
 import { appointmentIso, studioDateTime } from './dates'
 import type {
   Appointment,
@@ -8,6 +14,7 @@ import type {
   ClientProfile,
   CreatedAppointment,
   Actor,
+  PublicStylist,
   Service,
 } from './types'
 
@@ -23,6 +30,16 @@ export function mapService(service: ServiceDto): Service {
     duration: service.duracion_minutos,
     active: service.activo,
     visible: service.visible_al_publico,
+  }
+}
+
+export function mapPublicStylist(stylist: PublicStylistDto): PublicStylist {
+  return {
+    id: String(stylist.id),
+    name: stylist.nombre_completo,
+    specialty: stylist.cargo || undefined,
+    imageUrl: stylist.imagen_url ? apiAssetUrl(stylist.imagen_url) : undefined,
+    serviceIds: stylist.ids_servicios.map(String),
   }
 }
 

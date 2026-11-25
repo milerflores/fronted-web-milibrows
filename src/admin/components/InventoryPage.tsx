@@ -16,11 +16,13 @@ function SupplyEditorModal({
   categories,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   record: SupplyDto | null
   categories: InventoryCategoryDto[]
   onClose: () => void
   onSaved: () => void
+  onDeleted?: () => void
 }) {
   const [name, setName] = useState(record?.nombre ?? '')
   const [categoryId, setCategoryId] = useState(
@@ -28,6 +30,8 @@ function SupplyEditorModal({
   )
   const [minStock, setMinStock] = useState(String(record?.existencias_minimas ?? 0))
   const [active, setActive] = useState(record?.activo ?? true)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const saving = useRef(false)
@@ -55,6 +59,25 @@ function SupplyEditorModal({
     } finally {
       saving.current = false
       setBusy(false)
+    }
+  }
+
+  async function deleteSupply() {
+    if (!record || saving.current) return
+    saving.current = true
+    setBusy(true)
+    setDeleting(true)
+    setError('')
+    try {
+      await request(`/inventario/insumos/${record.id}`, 'DELETE')
+      onDeleted?.()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo eliminar el insumo.')
+      setConfirmDelete(false)
+    } finally {
+      saving.current = false
+      setBusy(false)
+      setDeleting(false)
     }
   }
 
@@ -96,7 +119,7 @@ function SupplyEditorModal({
           value={minStock}
           onChange={(event) => setMinStock(event.target.value)}
         />
-        <label className="flex gap-3 text-sm">
+        <label className="flex items-center gap-3 text-sm">
           <input
             type="checkbox"
             checked={active}
@@ -106,9 +129,49 @@ function SupplyEditorModal({
           Insumo activo
         </label>
         <Feedback error={error} />
-        <button className="api-primary" disabled={busy}>
-          {busy ? 'Guardando…' : 'Guardar insumo'}
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <button className="api-primary" disabled={busy}>
+            {busy && !deleting ? 'Guardando…' : 'Guardar insumo'}
+          </button>
+          {record && !confirmDelete && (
+            <button
+              type="button"
+              className="api-secondary text-caramel-dark"
+              disabled={busy}
+              onClick={() => {
+                setConfirmDelete(true)
+                setError('')
+              }}
+            >
+              Eliminar insumo
+            </button>
+          )}
+        </div>
+        {record && confirmDelete && (
+          <div className="rounded-card border border-[#E8CFC0] bg-[#FAF0EA] p-4 text-sm">
+            <p className="font-semibold text-caramel-dark">
+              ¿Eliminar «{record.nombre}»? Esta acción no se puede deshacer.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void deleteSupply()}
+                className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-full bg-caramel-dark px-5 py-2 text-sm font-semibold text-white transition hover:bg-caramel disabled:cursor-wait disabled:opacity-60"
+              >
+                {deleting ? 'Eliminando…' : 'Confirmar eliminación'}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className="api-secondary"
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </Modal>
   )
@@ -178,7 +241,7 @@ function MovementModal({
           </select>
         </label>
         <div className="grid gap-5 sm:grid-cols-2">
-          <label className="text-sm font-semibold">
+          <label className="block text-sm font-semibold">
             Tipo de movimiento
             <select
               className="api-input mt-2"
@@ -559,6 +622,11 @@ export function InventoryPage({ isAdmin }: { isAdmin: boolean }) {
           onSaved={() => {
             setSupplyEditor(null)
             setNotice('Insumo guardado correctamente.')
+            supplies.reload()
+          }}
+          onDeleted={() => {
+            setSupplyEditor(null)
+            setNotice('Insumo eliminado correctamente.')
             supplies.reload()
           }}
         />

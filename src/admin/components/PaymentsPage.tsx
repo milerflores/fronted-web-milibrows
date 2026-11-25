@@ -120,7 +120,7 @@ export function RegisterPaymentModal({
           </>
         )}
         <div className="grid gap-5 sm:grid-cols-2">
-          <label className="text-sm font-semibold">
+          <label className="block text-sm font-semibold">
             Método de pago
             <select
               className="api-input mt-2"
@@ -286,7 +286,7 @@ export function PaymentsPage({ isAdmin }: { isAdmin: boolean }) {
           value={until}
           onChange={(event) => setUntil(event.target.value)}
         />
-        <label className="text-sm font-semibold">
+        <label className="block text-sm font-semibold">
           Método de pago
           <select
             className="api-input mt-2"
@@ -301,7 +301,7 @@ export function PaymentsPage({ isAdmin }: { isAdmin: boolean }) {
             ))}
           </select>
         </label>
-        <label className="text-sm font-semibold">
+        <label className="block text-sm font-semibold">
           Estado
           <select
             className="api-input mt-2"

@@ -60,9 +60,9 @@ export function ScheduleEditor({
         {rows.map((row, index) => (
           <div
             key={index}
-            className="grid gap-3 rounded-card border border-line p-4 sm:grid-cols-[1.5fr_1fr_1fr_auto]"
+            className="grid items-end gap-3 rounded-card border border-line p-4 sm:grid-cols-[1.5fr_1fr_1fr_auto]"
           >
-            <label className="text-sm">
+            <label className="block text-sm font-semibold">
               Día
               <select
                 className="api-input mt-2"
@@ -76,7 +76,7 @@ export function ScheduleEditor({
                 ))}
               </select>
             </label>
-            <label className="text-sm">
+            <label className="block text-sm font-semibold">
               Desde
               <input
                 className="api-input mt-2"
@@ -86,7 +86,7 @@ export function ScheduleEditor({
                 onChange={(event) => change(index, 'hora_inicio', event.target.value)}
               />
             </label>
-            <label className="text-sm">
+            <label className="block text-sm font-semibold">
               Hasta
               <input
                 className="api-input mt-2"

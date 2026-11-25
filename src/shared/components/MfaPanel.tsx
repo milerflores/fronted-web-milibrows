@@ -54,21 +54,21 @@ export function MfaPanel({ session, onDone }: { session: Session; onDone?: () =>
     }
   }
   return (
-    <section className="api-panel mx-auto w-full max-w-xl">
-      <h1 className="font-display text-3xl">Protege tu acceso</h1>
+    <section className="api-panel mx-auto w-full max-w-[460px]">
+      <h1 className="text-center font-display text-2xl sm:text-3xl">Protege tu acceso</h1>
       {codes.length ? (
         <>
-          <p className="mt-4 text-sm text-stone">
+          <p className="mt-4 text-center text-sm text-stone">
             Guarda estos códigos de recuperación en un lugar privado. Cada uno sirve una sola vez.
           </p>
-          <ul className="my-6 grid grid-cols-2 gap-3 rounded-card bg-sand p-4 font-mono text-sm">
+          <ul className="my-6 grid grid-cols-2 gap-3 rounded-card bg-sand p-4 text-center font-mono text-sm">
             {codes.map((value) => (
               <li key={value}>{value}</li>
             ))}
           </ul>
           <Feedback error={error} />
           <button
-            className="api-primary"
+            className="api-primary w-full"
             disabled={busy}
             onClick={async () => {
               setBusy(true)
@@ -87,14 +87,14 @@ export function MfaPanel({ session, onDone }: { session: Session; onDone?: () =>
         </>
       ) : (
         <form onSubmit={submit} className="mt-5 space-y-5" aria-busy={busy}>
-          <p className="text-sm text-stone">
+          <p className="text-center text-sm text-stone">
             {session.mfaConfigured
               ? 'Verifica tu segundo factor para continuar.'
               : 'Configura una aplicación de autenticación para verificar tus próximos accesos.'}
           </p>
           {svg && (
             <img
-              className="mx-auto size-56 max-w-full"
+              className="mx-auto size-52 max-w-full rounded-card border border-line bg-white p-2"
               src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`}
               alt="QR para configurar la aplicación de autenticación"
             />
@@ -122,7 +122,7 @@ export function MfaPanel({ session, onDone }: { session: Session; onDone?: () =>
           {session.mfaConfigured && (
             <button
               type="button"
-              className="text-sm font-semibold underline"
+              className="text-sm font-semibold text-graphite underline underline-offset-4"
               onClick={() => {
                 setRecovery(!recovery)
                 setCode('')
@@ -132,8 +132,8 @@ export function MfaPanel({ session, onDone }: { session: Session; onDone?: () =>
             </button>
           )}
           <Feedback error={error} />
-          <div className="flex flex-wrap gap-3">
-            <button disabled={busy} className="api-primary">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button disabled={busy} className="api-primary flex-1">
               {busy
                 ? 'Verificando…'
                 : !session.mfaConfigured && !svg

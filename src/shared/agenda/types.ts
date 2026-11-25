@@ -44,6 +44,14 @@ export interface Stylist {
   serviceIds: string[]
 }
 
+export interface PublicStylist {
+  id: string
+  name: string
+  specialty?: string
+  imageUrl?: string
+  serviceIds: string[]
+}
+
 export interface Service {
   id: string
   description?: string

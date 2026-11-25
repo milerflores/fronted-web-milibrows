@@ -61,9 +61,8 @@ input {
 .client-simple-page [role="alert"] {
   border: 0;
 }
-.client-home-page :is(.text-sm, .text-xs),
 .client-home-page :is(.client-hero-action, .client-primary, .client-secondary) {
-  font-size: 16px;
+  font-size: 15px;
 }
 .client-eyebrow {
   color: var(--color-caramel-dark);
@@ -164,12 +163,13 @@ input {
   color: var(--color-graphite);
 }
 .client-nav-link {
-  border-bottom: 1px solid transparent;
+  border-bottom: 2px solid transparent;
   padding: 6px 0;
   color: var(--color-stone);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
   transition:
     color 0.2s,
     border-color 0.2s;
@@ -195,10 +195,13 @@ input {
 .client-header-action {
   border: 0;
   background: none;
-  padding: 8px 0;
+  padding: 6px 0;
   color: var(--color-graphite);
-  font-size: 18px;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+  text-decoration: none;
 }
 .client-header-action:hover {
   text-decoration: underline;
@@ -341,9 +344,7 @@ input {
   color: var(--color-ivory);
 }
 
-.client-home-page :is(.client-hero-action, .client-secondary),
-.client-header--home *,
-.client-shell--home footer * {
+.client-home-page :is(.client-hero-action, .client-secondary) {
   border: 0;
 }
 
@@ -351,7 +352,7 @@ input {
   position: relative;
   display: grid;
   width: 100%;
-  aspect-ratio: 1.28;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
   place-items: center;
   isolation: isolate;
@@ -416,7 +417,8 @@ input {
 .stylist-art {
   position: relative;
   display: grid;
-  height: 210px;
+  width: 100%;
+  aspect-ratio: 3 / 2;
   overflow: hidden;
   place-items: end center;
   background: linear-gradient(135deg, #eae0d5, #cdbca9);

@@ -146,7 +146,7 @@ function ReasonEditor({
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
-        <label className="flex gap-3 text-sm">
+        <label className="flex items-center gap-3 text-sm">
           <input
             type="checkbox"
             checked={active}
@@ -265,7 +265,7 @@ function LevelEditor({
                 onChange={(event) => change(index, { porcentaje_descuento: event.target.value })}
               />
             </div>
-            <label className="mt-4 flex gap-3 text-sm">
+            <label className="mt-4 flex items-center gap-3 text-sm">
               <input
                 type="checkbox"
                 disabled={level.codigo === 'glow'}
